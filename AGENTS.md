@@ -33,7 +33,12 @@ src/tools/index.ts              allTools[], registerAllTools(), runTool() (valid
 src/mcp-server.ts               createToolContext() (long-lived: token cache, today(), optional saveFile) + createGarminServer() (cheap, per request)
          │
          ├─► src/stdio.ts       serveStdio(); local today(); saveFile from src/local-files.ts (the only Node-only module)
-         └─► src/http.ts        createHttpHandler(): auth gate → createMcpHandler(); web-standard Request → Response
+         └─► src/http.ts        createHttpHandler(): OAuth routes → auth gate (static token or OAuth access token)
+                                → createMcpHandler(); web-standard Request → Response
+                ├─► src/oauth/routes.ts  stateless single-user OAuth 2.0 server: discovery metadata, /oauth/authorize
+                │                        (login page asking for MCP_AUTH_TOKEN), /oauth/token (codes, refresh)
+                ├─► src/oauth/tokens.ts  HMAC-signed codes/tokens (gcm1.<claims>.<sig>), PKCE, constant-time compare
+                ├─► src/oauth/page.ts    login/error HTML with CSP, frame-ancestors none, no-store
                 └─► api/mcp.ts  Vercel Function (GET/POST/DELETE), vercel.json rewrites /mcp → /api/mcp,
                                 outputDirectory public/ (required: Vercel fails the build without a static output folder)
 ```
@@ -113,6 +118,8 @@ Tool descriptions are the product: the model chooses tools from them. Each descr
 - **Read-only only.** Every tool has `readOnlyHint: true` and `destructiveHint: false`. Never add write endpoints.
 - **Never log or return secrets.** That covers `GARMIN_API_KEY`, `MCP_AUTH_TOKEN` and access tokens. Use stderr for diagnostics in stdio mode, because stdout carries the protocol.
 - **Tools never throw.** `runTool` turns validation and API failures into `isError: true` results with actionable text.
+- **OAuth stays stateless and single-user.** It is enabled only when `MCP_OAUTH_CLIENT_ID` and `MCP_OAUTH_CLIENT_SECRET` are both set; one without the other is a 500. The signing key is derived from `MCP_AUTH_TOKEN`, the client ID and the client secret, so rotating any of them revokes everything. Redirect URIs must be on the allowlist (`DEFAULT_REDIRECT_URIS`, loopback, `MCP_OAUTH_REDIRECT_URIS`), and errors about the client or redirect URI are shown on a page, never redirected. Codes live 5 minutes and can't be marked as used (there is no storage), which is why redeeming one requires the client secret, and PKCE whenever a challenge was sent. Don't add dynamic client registration or any persistent state without revisiting this design. `test/oauth.test.ts` includes an end-to-end run with the SDK's OAuth client.
+- **Vercel routing for OAuth:** `vercel.json` rewrites `/oauth/*` and `/.well-known/oauth-*` to the function and passes the original path as `?__route=`, which `oauthRoute()` reads.
 - **HTTP fails closed.** Don't weaken the auth gate in `src/http.ts`. A missing or short `MCP_AUTH_TOKEN` must keep returning 500.
 - **Portability:** everything reachable from `src/http.ts` must stay web-standard (Fetch API, `crypto.subtle`, `atob`/`btoa`) so it runs on Vercel, Workers, Netlify and Deno. Node-only code (`node:*`, `Buffer`, `process.env`) belongs in `src/stdio.ts` or `src/local-files.ts`. `test/portability.test.ts` walks the import graph and fails otherwise.
 - **Dates** are `YYYY-MM-DD` in the user's local calendar. Don't silently default dates to "today". The only exception is `todayDate` for the menstrual day view: it uses `ctx.today()`, which is the local date in stdio and UTC when hosted.
