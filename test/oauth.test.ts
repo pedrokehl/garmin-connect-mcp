@@ -219,6 +219,41 @@ describe('/oauth/authorize', () => {
     }
   });
 
+  const GEMINI_CALLBACK =
+    'https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-100681915307080570228-garmin-connect-mcp-hq31m8as91h_vercel_app';
+
+  it('allows Gemini app connector callbacks and ChatGPT by default, and completes the flow', async () => {
+    const { handle } = setup();
+    for (const uri of [GEMINI_CALLBACK, 'https://chatgpt.com/connector_platform_oauth_redirect']) {
+      expect((await handle(new Request(`${ORIGIN}/oauth/authorize?${authorizeParams({ redirect_uri: uri })}`))).status).toBe(200);
+    }
+    const signedIn = await signIn(handle, authorizeParams({ redirect_uri: GEMINI_CALLBACK, code_challenge_method: undefined }));
+    expect(signedIn.status).toBe(302);
+    const location = new URL(signedIn.headers.get('location')!);
+    expect(`${location.origin}${location.pathname}`).toBe(GEMINI_CALLBACK);
+    const code = location.searchParams.get('code')!;
+    const { body } = await exchange(handle, code, { redirect_uri: GEMINI_CALLBACK, code_verifier: '' });
+    expect((await handle(listTools(body.access_token as string))).status).toBe(200);
+  });
+
+  it('refuses look-alike Google relay URLs', async () => {
+    const { handle } = setup();
+    for (const uri of [
+      'https://oauth-redirect.googleusercontent.com/r/some-other-cloud-project', // relay to an arbitrary project
+      'https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-1-x/../evil',
+      'https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-1-x?next=https://evil.example',
+      'https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-1-x#frag',
+      'http://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-1-x',
+      'https://oauth-redirect.googleusercontent.com:8443/r/user_bound_custom-mcp-1-x',
+      'https://evil.googleusercontent.com/r/user_bound_custom-mcp-1-x',
+      'https://oauth-redirect.googleusercontent.com.evil.example/r/user_bound_custom-mcp-1-x',
+      'https://oauth-redirect-sandbox.googleusercontent.com/r/user_bound_custom-mcp-1-x',
+    ]) {
+      const response = await handle(new Request(`${ORIGIN}/oauth/authorize?${authorizeParams({ redirect_uri: uri })}`));
+      expect({ uri, status: response.status, location: response.headers.get('location') }).toEqual({ uri, status: 400, location: null });
+    }
+  });
+
   it('redirects back with errors the client can handle', async () => {
     const { handle } = setup();
     const badType = await handle(new Request(`${ORIGIN}/oauth/authorize?${authorizeParams({ response_type: 'token' })}`));

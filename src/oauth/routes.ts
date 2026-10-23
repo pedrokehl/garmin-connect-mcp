@@ -26,8 +26,19 @@ const MIN_CLIENT_SECRET_LENGTH = 24;
 export const DEFAULT_REDIRECT_URIS = [
   'https://claude.ai/api/mcp/auth_callback',
   'https://claude.com/api/mcp/auth_callback',
+  'https://chatgpt.com/connector_platform_oauth_redirect',
   'https://vertexaisearch.cloud.google.com/oauth-redirect',
 ];
+
+/**
+ * Gemini app custom MCP connectors call back through Google's OAuth relay with a per-user,
+ * per-connector path, e.g. https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-<user>-<host>.
+ * Only that exact host and the `user_bound_custom-mcp-` prefix are accepted: other `/r/<id>`
+ * relay paths forward to arbitrary Google Cloud projects that anyone can create, and other
+ * googleusercontent.com hosts serve user content. Even an attacker's own Gemini connector
+ * can't finish a sign-in: it needs the owner's secret on the login page and the client secret.
+ */
+const GEMINI_CONNECTOR_REDIRECT = /^https:\/\/oauth-redirect\.googleusercontent\.com\/r\/user_bound_custom-mcp-[A-Za-z0-9_-]+$/;
 
 export interface OAuthConfig {
   clientId: string;
@@ -220,6 +231,7 @@ function redirectError(redirectUri: string, state: string | undefined, error: st
 
 function isAllowedRedirect(uri: string, config: OAuthConfig): boolean {
   if (config.redirectUris.includes(uri)) return true;
+  if (GEMINI_CONNECTOR_REDIRECT.test(uri)) return true;
   // Loopback redirects (any port), as for native apps in RFC 8252: MCP Inspector, local clients.
   try {
     const url = new URL(uri);
