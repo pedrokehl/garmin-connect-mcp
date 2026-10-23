@@ -24,10 +24,10 @@ export const getMenstrualCycleDay = jsonTool({
     'and, during pregnancy tracking, weekly weight goal ranges and optionally baby movement (kick count) data.',
   inputSchema: z.object({
     calendarDate: date('The day to fetch.'),
-    todayDate: date("The current date from the user's point of view, used as the reference for predictions. Defaults to today (server clock, UTC).").optional(),
-    reducedResponse: z.boolean().optional().describe('Return a lighter payload. Default false.'),
-    skipbm: z.boolean().optional().describe('Exclude baby movement (kick count) data. Default false.'),
-    includeAnalysis: z.boolean().optional().describe('Include cycle analysis data. Default false.'),
+    todayDate: date("The current date from the user's point of view, used as the reference for predictions. Defaults to today (server clock, UTC).").nullish(),
+    reducedResponse: z.boolean().nullish().describe('Return a lighter payload. Default false.'),
+    skipbm: z.boolean().nullish().describe('Exclude baby movement (kick count) data. Default false.'),
+    includeAnalysis: z.boolean().nullish().describe('Include cycle analysis data. Default false.'),
   }),
   request: ({ calendarDate, todayDate, ...rest }) => ({
     path: `/periodichealth-service/menstrualcycle/dayview/${seg(calendarDate)}`,

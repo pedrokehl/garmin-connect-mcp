@@ -15,10 +15,15 @@ export function date(description: string) {
 export const startDate = (extra = '') => date(`First day of the range (inclusive).${extra ? ` ${extra}` : ''}`);
 export const endDate = (extra = '') => date(`Last day of the range (inclusive).${extra ? ` ${extra}` : ''}`);
 
-export const activityId = z.coerce
-  .number()
-  .int()
-  .positive()
+/**
+ * Strict integer. Deliberately not `z.coerce`: coercion turns `null`, `""` and `false`
+ * into 0 and `true` into 1, which silently changes what is sent to Garmin.
+ */
+export const integer = () => z.number().int();
+
+/** Activity IDs are int64; accept a JSON number or a string of digits, nothing else. */
+export const activityId = z
+  .union([z.number().int().positive(), z.string().regex(/^\d+$/, 'Activity IDs contain digits only.')])
   .describe('Numeric Garmin activity ID, as returned in `activityId` by garmin_search_activities.');
 
 function isRealDate(value: string): boolean {

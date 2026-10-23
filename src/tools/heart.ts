@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { seg } from '../garmin/client.js';
 import { jsonTool } from './define.js';
-import { checkRange, date, endDate, startDate } from './schemas.js';
+import { checkRange, date, endDate, integer, startDate } from './schemas.js';
 
 export const getHeartRate = jsonTool({
   name: 'garmin_get_heart_rate',
@@ -25,7 +25,7 @@ export const getHeartRateZones = jsonTool({
   inputSchema: z.object({
     generateDefaults: z
       .boolean()
-      .optional()
+      .nullish()
       .describe('Generate default zones when the user has none configured. Garmin default: true.'),
   }),
   request: ({ generateDefaults }) => ({ path: '/biometric-service/heartRateZones/v2', query: { generateDefaults } }),
@@ -65,12 +65,10 @@ export const getBodyBattery = jsonTool({
   inputSchema: z.object({
     startDate: startDate(),
     endDate: endDate('The range may span at most 31 days, counting both ends.'),
-    chunks: z.coerce
-      .number()
-      .int()
+    chunks: integer()
       .min(1)
       .max(96)
-      .optional()
+      .nullish()
       .describe('Split each day into this many intervals and report the min/max Body Battery of each (e.g. 4 = every 6 hours).'),
   }),
   validate: ({ startDate, endDate }) => checkRange(startDate, endDate, 31),
@@ -102,7 +100,7 @@ export const getFitnessAge = jsonTool({
     calendarDate: date('Reference date; the latest Fitness Age available on or before it is returned.'),
     fullHistoryScan: z
       .boolean()
-      .optional()
+      .nullish()
       .describe('Search the whole history for the latest value (Garmin default: true). If false, only the 28 days before calendarDate are considered.'),
   }),
   request: ({ calendarDate, fullHistoryScan }) => ({

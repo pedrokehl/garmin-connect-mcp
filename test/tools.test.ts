@@ -263,3 +263,42 @@ describe('README', () => {
     for (const tool of allTools) expect(readme).toContain(`\`${tool.name}\``);
   });
 });
+
+describe('numeric inputs are strict', () => {
+  it('treats null optional numbers as "not set" instead of 0', async () => {
+    const { client, garmin } = await connect(() => json([]));
+    await client.callTool({
+      name: 'garmin_search_activities',
+      arguments: { maxDistance: null, maxDuration: null, minAvgPower: null, upperLatitude: null },
+    });
+    expect(garmin.dataCalls()[0]?.url).toBe(`${BASE_URL}/activitylist-service/activities/search/activities?limit=20`);
+
+    await client.callTool({ name: 'garmin_get_nutrition_log', arguments: { date: '2026-10-20', mealId: null } });
+    expect(garmin.dataCalls()[1]?.url).toBe(`${BASE_URL}/nutrition-service/food/logs/2026-10-20`);
+  });
+
+  const rejected: [string, Record<string, unknown>][] = [
+    ['garmin_get_activity', { activityId: true }],
+    ['garmin_get_activity', { activityId: [7] }],
+    ['garmin_get_activity', { activityId: '12a' }],
+    ['garmin_get_activity', { activityId: '' }],
+    ['garmin_search_activities', { maxDistance: '' }],
+    ['garmin_search_activities', { limit: false }],
+    ['garmin_get_nutrition_log', { date: '2026-10-20', mealId: '' }],
+    ['garmin_get_body_battery', { startDate: '2026-10-01', endDate: '2026-10-02', chunks: true }],
+  ];
+  for (const [name, args] of rejected) {
+    it(`${name} rejects ${JSON.stringify(args)} without calling Garmin`, async () => {
+      const { client, garmin } = await connect(() => json({}));
+      const result = await client.callTool({ name, arguments: args });
+      expect(result.isError).toBe(true);
+      expect(garmin.calls).toHaveLength(0);
+    });
+  }
+
+  it('accepts activity IDs given as digit strings', async () => {
+    const { client, garmin } = await connect(() => json({}));
+    await client.callTool({ name: 'garmin_get_activity', arguments: { activityId: '21474836470' } });
+    expect(garmin.dataCalls()[0]?.url).toBe(`${BASE_URL}/activity-service/activity/21474836470`);
+  });
+});
