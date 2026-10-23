@@ -12,7 +12,7 @@ It exposes all 26 Personal API endpoints as read-only tools, and you can host it
 
 **1. Create a Garmin API key.** In Garmin Connect on the web, open [Settings → Personal API Token](https://connect.garmin.com/app/settings/personalApiToken), select **Create Key** and copy it. Garmin shows it only once.
 
-**2. Generate two secrets.** Run this twice:
+**2. Generate two secrets**: a client secret for the app to store, and a sign-in password that only you type. Run this twice:
 
 ```bash
 openssl rand -base64 32
@@ -28,7 +28,7 @@ openssl rand -base64 32
 |---|---|---|
 | `GARMIN_API_KEY` | The key from step 1 | Reads your Garmin data. Required. |
 | `MCP_OAUTH_CLIENT_SECRET` | First secret from step 2 | The **client secret** you enter in Claude, Gemini or ChatGPT. |
-| `MCP_AUTH_TOKEN` | Second secret from step 2 | The password you type on your server's sign-in page. Also lets header-based clients like Claude Code connect directly. |
+| `MCP_AUTH_TOKEN` | Second secret from step 2 | Your **sign-in password**, typed on your server's sign-in page when you connect an app (step 5). Also lets header-based clients like Claude Code connect directly. |
 | `MCP_OAUTH_CLIENT_ID` | `garmin-mcp` (pre-filled) | The **client ID** you enter in the app. Keep the default. |
 | `MCP_OAUTH_REDIRECT_URIS` | Optional, add later if needed | Extra allowed sign-in callback URLs, comma-separated. Claude's, Gemini's and ChatGPT's are already allowed. |
 
@@ -36,7 +36,7 @@ openssl rand -base64 32
 
 Your server is now at `https://<your-project>.vercel.app/mcp`. Vercel's free Hobby plan is enough. Recommended: under **Settings → Environment Variables**, recreate the two secrets as [Sensitive](https://vercel.com/docs/environment-variables/sensitive-environment-variables) (their values can't be read back afterwards), then redeploy. The deploy button can't do this for you.
 
-**4. Connect your app.** Add a custom connector with:
+**4. Add a custom connector** in your app with:
 
 | Field | Value |
 |---|---|
@@ -48,7 +48,9 @@ Your server is now at `https://<your-project>.vercel.app/mcp`. Vercel's free Hob
 - **Gemini**: add a custom MCP connector and fill in Client ID and Client secret. If it also asks for URLs, use `https://<your-project>.vercel.app/oauth/authorize` (authorization), `https://<your-project>.vercel.app/oauth/token` (token) and scope `garmin:read`.
 - **ChatGPT**: create a connector in developer mode (on plans that offer custom connectors), choose OAuth with a user-defined OAuth client, and leave the registration URL empty.
 
-A sign-in page from your own server then opens: paste your `MCP_AUTH_TOKEN` and select **Allow access**. If it says a redirect URL isn't allowed, add that URL to `MCP_OAUTH_REDIRECT_URIS` and redeploy.
+**5. Sign in.** When you connect, Claude, Gemini or ChatGPT opens a sign-in page from your own server that asks for **`MCP_AUTH_TOKEN`**. Paste it and select **Allow access**. You only do this once per connection.
+
+This is expected. The client ID and secret identify the app; the sign-in page proves the person connecting is you, so a leaked client secret alone isn't enough to read your data. If the page says a redirect URL isn't allowed, add that URL to `MCP_OAUTH_REDIRECT_URIS` and redeploy.
 
 **Claude Code** connects with the token directly:
 
