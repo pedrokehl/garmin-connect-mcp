@@ -46,7 +46,7 @@ The tool context is created **once per process** so the 24h Garmin token survive
 |---|---|
 | Install | `npm install` (also builds, through `prepare`) |
 | Build | `npm run build` (tsc → `dist/`) |
-| Vercel build check (offline) | Create a git-ignored `.vercel/project.json` containing `{"projectId":"local","orgId":"local","settings":{"framework":null}}`, then run `npx vercel build`. It must print `Build completed successfully` |
+| Vercel build check (offline) | Create a git-ignored `.vercel/project.json` containing `{"projectId":"local","orgId":"local","settings":{"framework":null}}`, then run `npx vercel build`. It must print `Build completed successfully`. This does **not** run the production type-check described under "Stay on TypeScript 6" |
 | Typecheck | `npm run typecheck` |
 | Unit/integration tests | `npm test` (vitest, Garmin fully mocked, no network) |
 | Run stdio from source | `GARMIN_API_KEY=… npm run dev` |
@@ -73,6 +73,16 @@ These come from Garmin's OpenAPI spec (Personal API 1.0.0) and its reference cli
 - Personal tier: read-only, pull-only, own data only, not for commercial multi-user apps. No Training API (workout upload) and no webhooks.
 
 Where the spec lives: https://developer.garmin.com/gc-developer-program/personal/swagger-docs/. The page renders an OpenAPI 3.0.1 document that is embedded in the page's JavaScript bundle; there is no standalone JSON URL. Garmin's reference Python client is https://github.com/garmin/connect-personal-api-python.
+
+## Stay on TypeScript 6 (Vercel can't use TypeScript 7 yet)
+
+`typescript` is pinned to `^6`. Don't upgrade it to 7.x until Vercel's builder supports it:
+
+- **What 7.x changed:** TypeScript 7 (the native Go compiler) no longer ships the JavaScript compiler API. In 7.0 and 7.1, `require('typescript')` exports only the version number.
+- **Why Vercel needs it:** Vercel's production builder (`@vercel/backends`) loads `typescript` from this project and type-checks `api/mcp.ts` with that API (`ts.readConfigFile`, `ts.sys`, `ts.createProgram`, `ts.getPreEmitDiagnostics`). On 7.x the deploy crashes with `TypeError: Cannot read properties of undefined (reading 'readFile')`. Seen on a real deploy, Oct 2026.
+- **Why local checks miss it:** a local `npx vercel build` takes a different path ("Using the TypeScript … compiler executable") and passes either way.
+
+To check whether a new TypeScript (or Vercel) version works, first confirm `node -e "console.log(typeof require('typescript').createProgram)"` prints `function`. Then deploy a preview to Vercel.
 
 ## Adding or updating a tool
 
