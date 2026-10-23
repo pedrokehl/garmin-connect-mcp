@@ -32,15 +32,14 @@ export function loginPage(input: LoginPageInput, status = 200): Response {
         <button type="submit">Allow access</button>
     </form>
     <p class="hint">Only continue if you started this connection yourself.</p>`;
-  // The form posts to this origin and is then redirected to the client: CSP form-action must allow both.
-  return htmlResponse(body, status, `'self' ${safeOrigin(input.redirectUri)}`);
+  return htmlResponse(body, status);
 }
 
 export function errorPage(title: string, message: string, status = 400): Response {
-  return htmlResponse(`<h1>${escapeHtml(title)}</h1><p class="error">${escapeHtml(message)}</p>`, status, "'none'");
+  return htmlResponse(`<h1>${escapeHtml(title)}</h1><p class="error">${escapeHtml(message)}</p>`, status);
 }
 
-function htmlResponse(body: string, status: number, formAction: string): Response {
+function htmlResponse(body: string, status: number): Response {
   const html = `<!doctype html>
 <html lang="en">
   <head>
@@ -66,7 +65,10 @@ function htmlResponse(body: string, status: number, formAction: string): Respons
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
-      'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; form-action ${formAction}; frame-ancestors 'none'; base-uri 'none'`,
+      // No form-action: browsers apply it to every redirect after the form is submitted, and OAuth
+      // callbacks chain through further origins (e.g. Google's relay forwards to Gemini), which it
+      // blocks. Injected forms aren't possible anyway: no scripts run and every value is escaped.
+      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
       'x-frame-options': 'DENY',
       'referrer-policy': 'no-referrer',
     },
@@ -87,13 +89,5 @@ function safeHost(uri: string): string {
     return new URL(uri).host;
   } catch {
     return 'an unknown address';
-  }
-}
-
-function safeOrigin(uri: string): string {
-  try {
-    return new URL(uri).origin;
-  } catch {
-    return '';
   }
 }

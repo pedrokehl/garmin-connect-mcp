@@ -195,7 +195,12 @@ describe('/oauth/authorize', () => {
     expect(html).toContain('&quot;&gt;&lt;script&gt;');
     expect(html).not.toContain('<script>x');
     expect(response.headers.get('x-frame-options')).toBe('DENY');
-    expect(response.headers.get('content-security-policy')).toContain("form-action 'self' https://claude.ai");
+    const csp = response.headers.get('content-security-policy') ?? '';
+    expect(csp).toContain("default-src 'none'"); // no scripts can run
+    expect(csp).toContain("frame-ancestors 'none'"); // no clickjacking
+    // form-action must not be set: browsers apply it to every redirect after submitting, and
+    // OAuth callbacks chain through other origins (Google's relay → Gemini).
+    expect(csp).not.toContain('form-action');
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
