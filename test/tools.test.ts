@@ -256,3 +256,10 @@ describe('date schema', () => {
     expect(garmin.calls).toHaveLength(0);
   });
 });
+
+describe('README', () => {
+  it('documents every tool', async () => {
+    const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+    for (const tool of allTools) expect(readme).toContain(`\`${tool.name}\``);
+  });
+});
