@@ -1,0 +1,54 @@
+{
+  "name": "garmin-connect-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for the official Garmin Connect Personal API: read your own activities, sleep, HRV, Body Battery, stress, weight, nutrition and more from any MCP client.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "garmin",
+    "garmin-connect",
+    "fitness",
+    "health",
+    "claude"
+  ],
+  "homepage": "https://github.com/pedrokehl/garmin-connect-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pedrokehl/garmin-connect-mcp.git"
+  },
+  "bugs": "https://github.com/pedrokehl/garmin-connect-mcp/issues",
+  "author": "Pedro Kehl <pedrokehl@hotmail.com>",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "garmin-connect-mcp": "dist/src/stdio.js"
+  },
+  "files": [
+    "dist/src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "node dist/src/stdio.js",
+    "dev": "tsx src/stdio.ts",
+    "inspector": "npx @modelcontextprotocol/inspector tsx src/stdio.ts",
+    "smoke": "tsx --env-file=.env scripts/smoke.ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
