@@ -76,3 +76,16 @@ describe('dates', () => {
     expect(Math.abs(Date.parse(local) - Date.parse(utc))).toBeLessThanOrEqual(86_400_000);
   });
 });
+
+describe('Vercel config', () => {
+  it('points outputDirectory at a folder that exists (Vercel fails the build otherwise)', async () => {
+    const root = resolve(SRC, '..');
+    const config = JSON.parse(await readFile(join(root, 'vercel.json'), 'utf8')) as {
+      outputDirectory?: string;
+      functions?: Record<string, { maxDuration?: number }>;
+    };
+    expect(config.outputDirectory).toBeTruthy();
+    await expect(readFile(join(root, config.outputDirectory!, 'index.html'), 'utf8')).resolves.toContain('<html');
+    expect(config.functions?.['api/mcp.ts']?.maxDuration).toBeGreaterThanOrEqual(60);
+  });
+});
