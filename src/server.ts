@@ -13,7 +13,7 @@ const INSTRUCTIONS = `Read-only access to the user's own Garmin Connect data thr
 - Dates are calendar dates (YYYY-MM-DD) in the user's local time zone. If you don't know the user's time zone or "today", call garmin_get_user_settings first.
 - Several range endpoints have a maximum span (steps and stress 28 days; hydration, sleep summaries and Body Battery 31 days; daily summaries 365 days). Split longer periods into several calls.
 - To analyse workouts, find IDs with garmin_search_activities, then call garmin_get_activity.
-- Distances are in meters, durations in seconds, speeds in m/s, weigh-ins in kilograms, weight goals in grams.
+- Distances are in meters, durations in seconds, speeds in m/s, all body weights (weigh-ins, bone/muscle mass, weight goals) in GRAMS.
 - A result of {"noData": true} means nothing was recorded, not an error.`;
 
 /**

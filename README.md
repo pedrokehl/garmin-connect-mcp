@@ -326,7 +326,7 @@ Every tool is read-only (`readOnlyHint: true`). Dates are `YYYY-MM-DD` in the us
 
 | Tool | What it returns | Inputs |
 |---|---|---|
-| `garmin_get_weight_entries` | Every weigh-in: weight (kg), BMI, body fat %, water %, bone/muscle mass, visceral fat, metabolic age. | `startDate`, `endDate` |
+| `garmin_get_weight_entries` | Every weigh-in: weight (**grams**), BMI, body fat %, water %, bone/muscle mass, visceral fat, metabolic age. | `startDate`, `endDate` |
 | `garmin_get_weight_summary` | Latest weigh-in per day, range average, nearest weigh-ins before/after. | `startDate`, `endDate`, `includeAll` |
 | `garmin_get_weight_goals` | Effective weight goals (target in **grams**) and goal ranges. | `startDate`, `endDate` |
 
@@ -352,7 +352,7 @@ What Garmin documents, and what this server adds on top:
 - **Read-only, pull-only, your own data only.** There are no webhooks and no workout upload: Garmin's Training API is not part of the Personal tier.
 - **Rate limits** are not published. Prefer range endpoints over many single-day calls.
 - **Not for commercial, multi-user apps.** That is Garmin's rule for the Personal API.
-- **Units:** distances in meters, durations in seconds, speeds in m/s, weigh-ins in kg, weight goals in grams, hydration in ml.
+- **Units:** distances in meters, durations in seconds, speeds in m/s, all body weights in **grams** (Garmin's spec says kg for weigh-ins, but the live API returns grams), hydration in ml.
 
 Official references: [Personal API overview](https://developer.garmin.com/gc-developer-program/personal/personal-api), [FAQ](https://developer.garmin.com/gc-developer-program/personal/personal-faq/), [OpenAPI docs](https://developer.garmin.com/gc-developer-program/personal/swagger-docs/), and Garmin's [Python reference client](https://github.com/garmin/connect-personal-api-python).
 

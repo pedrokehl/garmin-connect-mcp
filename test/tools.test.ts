@@ -439,3 +439,62 @@ describe('range boundaries', () => {
     expect(result.isError ?? false).toBe(false);
   });
 });
+
+describe('garmin_get_weight_entries fallback (Garmin weight/all returns 400)', () => {
+  const args = { startDate: '2026-10-01', endDate: '2026-10-23' };
+  const entry = (day: string, grams: number) => ({ calendarDate: day, weight: grams, bmi: null, sourceType: 'MANUAL' });
+
+  it('falls back to weight/range?includeAll=true and flattens every weigh-in', async () => {
+    const { client, garmin } = await connect((call) =>
+      call.url.includes('/weight/all/')
+        ? new Response('{}', { status: 400 })
+        : json({
+            dailyWeightSummaries: [
+              { summaryDate: '2026-10-02', allWeightMetrics: [entry('2026-10-02', 80000)] },
+              { summaryDate: '2026-10-05', allWeightMetrics: [entry('2026-10-05', 79900), entry('2026-10-05', 79800)] },
+              { summaryDate: '2026-10-06' },
+            ],
+          }),
+    );
+
+    const result = await client.callTool({ name: 'garmin_get_weight_entries', arguments: args });
+
+    expect(result.isError ?? false).toBe(false);
+    expect(JSON.parse(textOf(result))).toEqual([entry('2026-10-02', 80000), entry('2026-10-05', 79900), entry('2026-10-05', 79800)]);
+    expect(garmin.dataCalls().map((c) => c.url)).toEqual([
+      `${BASE_URL}/weight-service/weight/all/2026-10-01/2026-10-23`,
+      `${BASE_URL}/weight-service/weight/range/2026-10-01/2026-10-23?includeAll=true`,
+    ]);
+  });
+
+  it('uses weight/all directly when it works', async () => {
+    const { client, garmin } = await connect(() => json([entry('2026-10-02', 80000)]));
+    const result = await client.callTool({ name: 'garmin_get_weight_entries', arguments: args });
+    expect(JSON.parse(textOf(result))).toEqual([entry('2026-10-02', 80000)]);
+    expect(garmin.dataCalls()).toHaveLength(1);
+  });
+
+  it('does not fall back on other errors', async () => {
+    const { client, garmin } = await connect(() => new Response('down', { status: 503 }));
+    const result = await client.callTool({ name: 'garmin_get_weight_entries', arguments: args });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/Garmin server error \(503/);
+    expect(garmin.dataCalls()).toHaveLength(1);
+  });
+
+  it('passes through noData from the fallback', async () => {
+    const { client } = await connect((call) =>
+      call.url.includes('/weight/all/') ? new Response('{}', { status: 400 }) : new Response(null, { status: 204 }),
+    );
+    const result = await client.callTool({ name: 'garmin_get_weight_entries', arguments: args });
+    expect(JSON.parse(textOf(result))).toMatchObject({ noData: true });
+  });
+
+  it('describes weights in grams, not kilograms', () => {
+    for (const name of ['garmin_get_weight_entries', 'garmin_get_weight_summary', 'garmin_get_weight_goals']) {
+      const description = allTools.find((t) => t.name === name)!.description;
+      expect(description).toMatch(/GRAMS/);
+      expect(description).not.toMatch(/kilograms/i);
+    }
+  });
+});

@@ -1,11 +1,17 @@
 import { z } from 'zod';
 import { seg } from '../garmin/client.js';
-import { jsonTool } from './define.js';
+import { GarminApiError } from '../garmin/errors.js';
+import { customTool, jsonResult, jsonTool } from './define.js';
 import { checkRange, endDate, startDate } from './schemas.js';
 
-const WEIGHT_UNITS = 'weight is in kilograms; bodyFat and bodyWater are percentages.';
+/**
+ * Garmin's spec says kilograms, but the live API returns grams (verified Oct 2026:
+ * every weight field is > 1000 for an adult). The descriptions state what the API returns.
+ */
+const WEIGHT_UNITS =
+  'weight, boneMass and muscleMass are in GRAMS (75000 = 75 kg); bodyFat and bodyWater are percentages; timestampGMT and date are epoch milliseconds.';
 
-export const getWeightEntries = jsonTool({
+export const getWeightEntries = customTool({
   name: 'garmin_get_weight_entries',
   title: 'Get all weight entries (date range)',
   endpoint: 'GET /weight-service/weight/all/{startDate}/{endDate}',
@@ -15,7 +21,21 @@ export const getWeightEntries = jsonTool({
     'For one value per day plus the range average use garmin_get_weight_summary.',
   inputSchema: z.object({ startDate: startDate(), endDate: endDate() }),
   validate: ({ startDate, endDate }) => checkRange(startDate, endDate),
-  request: ({ startDate, endDate }) => ({ path: `/weight-service/weight/all/${seg(startDate)}/${seg(endDate)}` }),
+  run: async ({ startDate, endDate }, ctx) => {
+    const range = `${seg(startDate)}/${seg(endDate)}`;
+    try {
+      return jsonResult(await ctx.client.getJson(`/weight-service/weight/all/${range}`));
+    } catch (error) {
+      if (!(error instanceof GarminApiError) || error.status !== 400) throw error;
+    }
+    // As of Oct 2026 Garmin answers 400 with an empty body to every documented request on
+    // weight/all, even for dates that have weigh-ins. weight/range with includeAll returns the
+    // same entries (same fields, plus samplePk and sourceType) grouped by day, so flatten those.
+    const fallback = await ctx.client.getJson(`/weight-service/weight/range/${range}`, { includeAll: true });
+    if (fallback.noData) return jsonResult(fallback);
+    const days = (fallback.data as { dailyWeightSummaries?: { allWeightMetrics?: unknown[] }[] }).dailyWeightSummaries ?? [];
+    return jsonResult({ noData: false, data: days.flatMap((day) => day.allWeightMetrics ?? []) });
+  },
 });
 
 export const getWeightSummary = jsonTool({
@@ -46,7 +66,7 @@ export const getWeightGoals = jsonTool({
   endpoint: 'GET /goal-service/goal/user/effective/weightgoal/{startDate}/{endDate}',
   description:
     "Get the user's weight goals in effect during a date range: userGoals (goalValue = target weight in GRAMS, category such as MANUAL or PREGNANCY, " +
-    'tracking period, start/end dates) and userGoalRanges (low/high target ranges). Note: goals are in grams, while weigh-ins are in kilograms.',
+    'tracking period, start/end dates) and userGoalRanges (low/high target ranges, also in grams).',
   inputSchema: z.object({ startDate: startDate(), endDate: endDate() }),
   validate: ({ startDate, endDate }) => checkRange(startDate, endDate),
   request: ({ startDate, endDate }) => ({

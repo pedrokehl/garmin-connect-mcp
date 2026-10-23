@@ -64,7 +64,12 @@ These come from Garmin's OpenAPI spec (Personal API 1.0.0) and its reference cli
 - Token: `POST /personalapitoken-service/personal-api/personal-api-key/token`, header `Authorization: ApiKey <key>`, no body. The response body is the **raw JWT as text**, not JSON. Lifetime: 24h, or until the key expires if that comes first. No refresh tokens.
 - Data calls: `GET` with `Authorization: Bearer <jwt>`. Errors: 400/401/403/404/500. Some endpoints return 204 when there is no data.
 - Documented max ranges: steps and stress 28 days; hydration, sleep summaries and Body Battery 31 days; v2 daily summaries 1 year (enforced as 365 days, counting both ends).
-- Units per the spec: weigh-ins in **kg**, weight goals in **grams**, distances in m, durations in s, hydration in ml, stress durations in s.
+- Units: distances in m, durations in s, hydration in ml, stress durations in s. **Body weights are in grams** everywhere (weigh-ins, weight summaries, weight goals). The spec says weigh-ins are kg, but live data checked in Oct 2026 is gram-scale. In weigh-in entries, `date` and `timestampGMT` are epoch ms numbers, although the spec says strings.
+
+## Known Garmin API issues (verified live, Oct 2026)
+
+- `GET /weight-service/weight/all/{startDate}/{endDate}` answers **400 with body `{}`** to every documented request, including single days with weigh-ins. `garmin_get_weight_entries` still tries it first, then falls back to `weight/range?includeAll=true` and flattens `dailyWeightSummaries[].allWeightMetrics`, which has the same fields. If Garmin fixes the endpoint, the fallback stops being used automatically.
+- When the spec and live data disagree, trust live data. Check with `npm run smoke`, and with a throwaway script that prints only types or magnitudes, never values.
 - Personal tier: read-only, pull-only, own data only, not for commercial multi-user apps. No Training API (workout upload) and no webhooks.
 
 Where the spec lives: https://developer.garmin.com/gc-developer-program/personal/swagger-docs/. The page renders an OpenAPI 3.0.1 document that is embedded in the page's JavaScript bundle; there is no standalone JSON URL. Garmin's reference Python client is https://github.com/garmin/connect-personal-api-python.

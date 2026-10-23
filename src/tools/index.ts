@@ -3,7 +3,7 @@ import { describeError } from '../garmin/errors.js';
 import { activityTools } from './activities.js';
 import { bodyTools } from './body.js';
 import { dailyTools } from './daily.js';
-import type { GarminTool, ToolContext } from './define.js';
+import { jsonResult, type GarminTool, type ToolContext } from './define.js';
 import { heartTools } from './heart.js';
 import { nutritionTools } from './nutrition.js';
 import { profileTools } from './profile.js';
@@ -21,9 +21,6 @@ export const allTools: GarminTool[] = [
   ...nutritionTools,
   ...womensHealthTools,
 ];
-
-const NO_DATA_MESSAGE =
-  'Garmin returned no data for this request: nothing was recorded for these dates, or the feature is not used or not supported by the device.';
 
 export function registerAllTools(server: McpServer, ctx: ToolContext): void {
   for (const tool of allTools) {
@@ -75,9 +72,7 @@ export async function runTool(tool: GarminTool, args: unknown, ctx: ToolContext)
   try {
     if (tool.kind === 'custom') return await tool.run(args as never, ctx);
     const { path, query } = tool.request(args as never, ctx);
-    const result = await ctx.client.getJson(path, query);
-    const payload = result.noData ? { noData: true, message: NO_DATA_MESSAGE } : result.data;
-    return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+    return jsonResult(await ctx.client.getJson(path, query));
   } catch (error) {
     return errorResult(describeError(error));
   }

@@ -1,6 +1,6 @@
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import type { z } from 'zod';
-import type { GarminClient, Query } from '../garmin/client.js';
+import type { GarminClient, JsonResult, Query } from '../garmin/client.js';
 
 export interface ToolContext {
   client: GarminClient;
@@ -48,4 +48,13 @@ export function jsonTool<S extends z.ZodObject>(tool: Omit<JsonTool<S>, 'kind'>)
 
 export function customTool<S extends z.ZodObject>(tool: Omit<CustomTool<S>, 'kind'>): CustomTool<S> {
   return { kind: 'custom', ...tool };
+}
+
+const NO_DATA_MESSAGE =
+  'Garmin returned no data for this request: nothing was recorded for these dates, or the feature is not used or not supported by the device.';
+
+/** The standard tool result for a JSON response: Garmin's data as-is, or a friendly noData marker. */
+export function jsonResult(result: JsonResult): CallToolResult {
+  const payload = result.noData ? { noData: true, message: NO_DATA_MESSAGE } : result.data;
+  return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
 }
