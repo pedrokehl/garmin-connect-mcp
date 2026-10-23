@@ -5,8 +5,15 @@ export interface LoginPageInput {
   params: Record<string, string>;
   clientId: string;
   redirectUri: string;
+  /** Which server secret the owner must type. */
+  secretName: 'MCP_AUTH_TOKEN' | 'MCP_OAUTH_CLIENT_SECRET';
   error?: string;
 }
+
+const SECRET_LABELS = {
+  MCP_AUTH_TOKEN: 'Server access token',
+  MCP_OAUTH_CLIENT_SECRET: 'OAuth client secret',
+} as const;
 
 export function loginPage(input: LoginPageInput, status = 200): Response {
   const hidden = Object.entries(input.params)
@@ -20,8 +27,8 @@ export function loginPage(input: LoginPageInput, status = 200): Response {
     ${input.error ? `<p class="error" role="alert">${escapeHtml(input.error)}</p>` : ''}
     <form method="post" action="/oauth/authorize">
         ${hidden}
-        <label for="mcp_auth_token">Server access token (<code>MCP_AUTH_TOKEN</code>)</label>
-        <input id="mcp_auth_token" name="mcp_auth_token" type="password" autocomplete="current-password" required autofocus>
+        <label for="server_secret">${SECRET_LABELS[input.secretName]} (<code>${input.secretName}</code>)</label>
+        <input id="server_secret" name="server_secret" type="password" autocomplete="current-password" required autofocus>
         <button type="submit">Allow access</button>
     </form>
     <p class="hint">Only continue if you started this connection yourself.</p>`;

@@ -51,7 +51,7 @@ function authorizeParams(overrides: Record<string, string | undefined> = {}): UR
 
 async function signIn(handle: (r: Request) => Promise<Response>, params: URLSearchParams, token = AUTH_TOKEN) {
   const body = new URLSearchParams(params);
-  body.set('mcp_auth_token', token);
+  body.set('server_secret', token);
   return handle(
     new Request(`${ORIGIN}/oauth/authorize`, {
       method: 'POST',
@@ -61,9 +61,13 @@ async function signIn(handle: (r: Request) => Promise<Response>, params: URLSear
   );
 }
 
-async function getCode(handle: (r: Request) => Promise<Response>, overrides: Record<string, string | undefined> = {}) {
+async function getCode(
+  handle: (r: Request) => Promise<Response>,
+  overrides: Record<string, string | undefined> = {},
+  secret = AUTH_TOKEN,
+) {
   const challenge = await pkceChallenge(VERIFIER);
-  const response = await signIn(handle, authorizeParams({ code_challenge: challenge, ...overrides }));
+  const response = await signIn(handle, authorizeParams({ code_challenge: challenge, ...overrides }), secret);
   expect(response.status).toBe(302);
   const location = new URL(response.headers.get('location')!);
   return { code: location.searchParams.get('code')!, location };
@@ -186,7 +190,8 @@ describe('/oauth/authorize', () => {
     const response = await handle(new Request(`${ORIGIN}/oauth/authorize?${authorizeParams({ state: '"><script>x</script>' })}`));
     const html = await response.text();
     expect(response.status).toBe(200);
-    expect(html).toContain('name="mcp_auth_token"');
+    expect(html).toContain('name="server_secret"');
+    expect(html).toContain('<code>MCP_AUTH_TOKEN</code>');
     expect(html).toContain('&quot;&gt;&lt;script&gt;');
     expect(html).not.toContain('<script>x');
     expect(response.headers.get('x-frame-options')).toBe('DENY');
@@ -349,9 +354,71 @@ describe('/oauth/token', () => {
   });
 });
 
+describe('each auth method is optional', () => {
+  it('refuses everything when neither MCP_AUTH_TOKEN nor MCP_OAUTH_CLIENT_SECRET is set', async () => {
+    const { handle } = setup({ MCP_AUTH_TOKEN: undefined, MCP_OAUTH_CLIENT_SECRET: undefined });
+    const response = await handle(listTools('anything'));
+    expect(response.status).toBe(500);
+    expect(await response.text()).toMatch(/set MCP_AUTH_TOKEN .*MCP_OAUTH_CLIENT_SECRET .*or both/);
+  });
+
+  it('bearer only: static token works, OAuth endpoints are off', async () => {
+    const { handle } = setup({ MCP_OAUTH_CLIENT_SECRET: undefined });
+    expect((await handle(listTools(AUTH_TOKEN))).status).toBe(200);
+    expect((await handle(new Request(`${ORIGIN}/oauth/authorize?${authorizeParams()}`))).status).toBe(404);
+  });
+
+  describe('OAuth only (no MCP_AUTH_TOKEN)', () => {
+    const oauthOnly = () => setup({ MCP_AUTH_TOKEN: undefined });
+
+    it('asks for the client secret on the sign-in page', async () => {
+      const { handle } = oauthOnly();
+      const html = await (await handle(new Request(`${ORIGIN}/oauth/authorize?${authorizeParams()}`))).text();
+      expect(html).toContain('<code>MCP_OAUTH_CLIENT_SECRET</code>');
+      expect(html).not.toContain('MCP_AUTH_TOKEN');
+    });
+
+    it('signs in with the client secret and serves tools with the OAuth token', async () => {
+      const { handle } = oauthOnly();
+      const { code } = await getCode(handle, {}, CLIENT_SECRET);
+      const { body } = await exchange(handle, code);
+      expect((await handle(listTools(body.access_token as string))).status).toBe(200);
+    });
+
+    it('rejects a wrong secret on the sign-in page', async () => {
+      const { handle } = oauthOnly();
+      const response = await signIn(handle, authorizeParams(), AUTH_TOKEN);
+      expect(response.status).toBe(401);
+      expect(await response.text()).toMatch(/doesn&#39;t match MCP_OAUTH_CLIENT_SECRET/);
+    });
+
+    it('does not accept the client secret, or any static value, as a bearer token', async () => {
+      const { handle } = oauthOnly();
+      for (const bearer of [CLIENT_SECRET, AUTH_TOKEN, 'undefined', '']) {
+        const response = await handle(listTools(bearer));
+        expect(response.status).toBe(401);
+        expect(await response.text()).not.toMatch(/MCP_AUTH_TOKEN/);
+      }
+    });
+
+    it('revokes OAuth tokens when the client secret changes', async () => {
+      const shared = { now: Date.now() };
+      const { handle } = setup({ MCP_AUTH_TOKEN: undefined }, shared);
+      const { code } = await getCode(handle, {}, CLIENT_SECRET);
+      const access = (await exchange(handle, code)).body.access_token as string;
+      const rotated = setup({ MCP_AUTH_TOKEN: undefined, MCP_OAUTH_CLIENT_SECRET: 'another-client-secret-0123456789xyz' }, shared).handle;
+      expect((await rotated(listTools(access))).status).toBe(401);
+    });
+  });
+});
+
 describe('end to end with the MCP SDK OAuth client', () => {
-  it('discovers, signs in, exchanges the code and lists tools', async () => {
-    const { handle } = setup();
+  const modes = [
+    { label: 'with MCP_AUTH_TOKEN set', env: {}, secret: AUTH_TOKEN },
+    { label: 'OAuth only', env: { MCP_AUTH_TOKEN: undefined }, secret: CLIENT_SECRET },
+  ];
+  it.each(modes)('discovers, signs in, exchanges the code and lists tools ($label)', async ({ env, secret }) => {
+    const { handle } = setup(env);
     const fetchViaHandler = (input: string | URL | Request, init?: RequestInit) =>
       handle(input instanceof Request ? input : new Request(input, init));
 
@@ -383,7 +450,7 @@ describe('end to end with the MCP SDK OAuth client', () => {
 
     // The user opens the page and types MCP_AUTH_TOKEN.
     expect((await handle(new Request(authorizationUrl!))).status).toBe(200);
-    const redirect = await signIn(handle, authorizationUrl!.searchParams);
+    const redirect = await signIn(handle, authorizationUrl!.searchParams, secret);
     const code = new URL(redirect.headers.get('location')!).searchParams.get('code')!;
     await transport.finishAuth(code);
 

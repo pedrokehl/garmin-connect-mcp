@@ -33,7 +33,7 @@ afterEach(async () => {
 });
 
 describe('HTTP auth', () => {
-  it('refuses every request when MCP_AUTH_TOKEN is not set (fails closed)', async () => {
+  it('refuses every request when no auth method is configured (fails closed)', async () => {
     const { handle } = handler({ MCP_AUTH_TOKEN: undefined });
     const response = await handle(listTools(`Bearer ${TOKEN}`));
     expect(response.status).toBe(500);

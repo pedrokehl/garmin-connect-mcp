@@ -2,13 +2,13 @@
  * Stateless, single-user OAuth 2.0 authorization server for clients that can't send a
  * static bearer header (the Gemini app, claude.ai connectors).
  *
- * Flow: the client sends the user to /oauth/authorize, the user types MCP_AUTH_TOKEN on our
- * page, we redirect back with a signed short-lived code, and the client exchanges it (with
+ * Flow: the client sends the user to /oauth/authorize, the user proves they own the server by
+ * typing MCP_AUTH_TOKEN (or, when only OAuth is configured, the client secret) on our page, we redirect back with a signed short-lived code, and the client exchanges it (with
  * its client secret, plus PKCE when it used it) for signed access and refresh tokens.
  *
  * Nothing is stored. Trade-off: a code can be replayed until it expires (5 minutes), which is
  * acceptable because redeeming it also requires the client secret, and PKCE when used.
- * Rotating MCP_AUTH_TOKEN or the client secret revokes everything.
+ * Rotating the client secret (or MCP_AUTH_TOKEN, when set) revokes everything.
  */
 import { ConfigError } from '../config.js';
 import { errorPage, loginPage } from './page.js';
@@ -32,7 +32,9 @@ export const DEFAULT_REDIRECT_URIS = [
 export interface OAuthConfig {
   clientId: string;
   clientSecret: string;
-  authToken: string;
+  /** What the owner types on the sign-in page: MCP_AUTH_TOKEN if set, otherwise the client secret. */
+  loginSecret: string;
+  loginSecretName: 'MCP_AUTH_TOKEN' | 'MCP_OAUTH_CLIENT_SECRET';
   key: CryptoKey;
   redirectUris: string[];
   /** Delay before answering a wrong MCP_AUTH_TOKEN on the login page. */
@@ -45,7 +47,7 @@ type Env = Record<string, string | undefined>;
  * OAuth is on when MCP_OAUTH_CLIENT_SECRET is set. The client ID defaults to DEFAULT_CLIENT_ID;
  * setting MCP_OAUTH_CLIENT_ID without a secret is a misconfiguration.
  */
-export async function loadOAuthConfig(env: Env, authToken: string): Promise<OAuthConfig | undefined> {
+export async function loadOAuthConfig(env: Env, authToken: string | undefined): Promise<OAuthConfig | undefined> {
   const configuredId = env.MCP_OAUTH_CLIENT_ID?.trim();
   const clientSecret = env.MCP_OAUTH_CLIENT_SECRET?.trim();
   if (!clientSecret) {
@@ -68,7 +70,8 @@ export async function loadOAuthConfig(env: Env, authToken: string): Promise<OAut
   return {
     clientId,
     clientSecret,
-    authToken,
+    loginSecret: authToken ?? clientSecret,
+    loginSecretName: authToken ? 'MCP_AUTH_TOKEN' : 'MCP_OAUTH_CLIENT_SECRET',
     key: await deriveSigningKey(authToken, clientId, clientSecret),
     redirectUris: [...DEFAULT_REDIRECT_URIS, ...extra],
     failureDelayMs: 500,
@@ -178,12 +181,16 @@ async function authorize(request: Request, url: URL, config: OAuthConfig, nowMs:
     return redirectError(redirectUri, params.state, 'invalid_request', 'Only the S256 code_challenge_method is supported.');
   }
 
-  if (request.method === 'GET') return loginPage({ params, clientId, redirectUri });
+  const secretName = config.loginSecretName;
+  if (request.method === 'GET') return loginPage({ params, clientId, redirectUri, secretName });
 
-  const presented = source.get('mcp_auth_token') ?? '';
-  if (!(await secretsEqual(presented.trim(), config.authToken))) {
+  const presented = source.get('server_secret') ?? '';
+  if (!(await secretsEqual(presented.trim(), config.loginSecret))) {
     await new Promise((resolve) => setTimeout(resolve, config.failureDelayMs));
-    return loginPage({ params, clientId, redirectUri, error: "That token doesn't match MCP_AUTH_TOKEN on this server." }, 401);
+    return loginPage(
+      { params, clientId, redirectUri, secretName, error: `That doesn't match ${secretName} on this server.` },
+      401,
+    );
   }
 
   const now = Math.floor(nowMs / 1000);

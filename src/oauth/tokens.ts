@@ -27,17 +27,13 @@ export interface TokenClaims {
 }
 
 /**
- * Signing key bound to MCP_AUTH_TOKEN and the client credentials: changing any of
- * them invalidates every code and token issued before.
+ * Signing key bound to the client credentials and, when set, MCP_AUTH_TOKEN: changing any
+ * of them invalidates every code and token issued before.
  */
-export async function deriveSigningKey(authToken: string, clientId: string, clientSecret: string): Promise<CryptoKey> {
-  const base = await crypto.subtle.importKey('raw', encoder.encode(authToken), { name: 'HMAC', hash: 'SHA-256' }, false, [
-    'sign',
-  ]);
-  const material = await crypto.subtle.sign(
-    'HMAC',
-    base,
-    encoder.encode(`garmin-connect-mcp/oauth/v1\n${clientId}\n${clientSecret}`),
+export async function deriveSigningKey(authToken: string | undefined, clientId: string, clientSecret: string): Promise<CryptoKey> {
+  const material = await crypto.subtle.digest(
+    'SHA-256',
+    encoder.encode(`garmin-connect-mcp/oauth/v2\n${clientId}\n${clientSecret}\n${authToken ?? ''}`),
   );
   return crypto.subtle.importKey('raw', material, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }

@@ -2,10 +2,12 @@
  * Web-standard HTTP entrypoint (Request → Response), shared by Vercel and any
  * other fetch-style runtime (Cloudflare Workers, Deno, Bun, Netlify).
  *
- * Personal health data is behind this endpoint, so it fails closed: without a
- * configured MCP_AUTH_TOKEN every request is refused. Clients authenticate with
- * `Authorization: Bearer <MCP_AUTH_TOKEN>`, or, when MCP_OAUTH_CLIENT_SECRET is set,
- * with an access token from the built-in OAuth flow.
+ * Personal health data is behind this endpoint, so it fails closed: unless at least one
+ * authentication method is configured, every request is refused. Each is optional:
+ * - MCP_AUTH_TOKEN: clients send `Authorization: Bearer <MCP_AUTH_TOKEN>` (Claude Code,
+ *   Cursor, Gemini CLI, mcp-remote, scripts).
+ * - MCP_OAUTH_CLIENT_SECRET: clients sign in through the built-in OAuth flow and send its
+ *   access token (the Gemini app, claude.ai).
  */
 import { createMcpHandler, type McpHttpHandler } from '@modelcontextprotocol/server';
 import { ConfigError, loadGarminConfig, processEnv } from './config.js';
@@ -39,11 +41,11 @@ export function createHttpHandler(options: HttpHandlerOptions = {}): (request: R
   let oauthLoading: Promise<OAuthConfig | undefined> | undefined;
 
   return async (request) => {
-    const expected = env.MCP_AUTH_TOKEN?.trim();
-    if (!expected || expected.length < MIN_AUTH_TOKEN_LENGTH) {
+    const expected = env.MCP_AUTH_TOKEN?.trim() || undefined;
+    if (expected && expected.length < MIN_AUTH_TOKEN_LENGTH) {
       return jsonError(
         500,
-        `Server not configured: set MCP_AUTH_TOKEN to a random secret of at least ${MIN_AUTH_TOKEN_LENGTH} characters (e.g. \`openssl rand -base64 32\`).`,
+        `Server not configured: MCP_AUTH_TOKEN must be a random secret of at least ${MIN_AUTH_TOKEN_LENGTH} characters (e.g. \`openssl rand -base64 32\`).`,
       );
     }
 
@@ -55,6 +57,13 @@ export function createHttpHandler(options: HttpHandlerOptions = {}): (request: R
     } catch (error) {
       oauthLoading = undefined;
       return jsonError(500, `Server not configured: ${error instanceof ConfigError ? error.message : 'invalid OAuth settings.'}`);
+    }
+    if (!expected && !oauth) {
+      return jsonError(
+        500,
+        'Server not configured: set MCP_AUTH_TOKEN (for clients that send a bearer header), MCP_OAUTH_CLIENT_SECRET ' +
+          '(for OAuth clients such as the Gemini app and claude.ai), or both. Use random secrets of at least 24 characters.',
+      );
     }
 
     const url = new URL(request.url);
@@ -70,8 +79,10 @@ export function createHttpHandler(options: HttpHandlerOptions = {}): (request: R
       const challenge = oauth
         ? `Bearer realm="${SERVER_NAME}", resource_metadata="${resourceMetadataUrl(url)}"`
         : `Bearer realm="${SERVER_NAME}"`;
-      const hint = oauth ? ' or sign in through OAuth' : '';
-      return jsonError(401, `Missing or invalid bearer token. Send "Authorization: Bearer <MCP_AUTH_TOKEN>"${hint}.`, {
+      const ways = [expected ? 'send "Authorization: Bearer <MCP_AUTH_TOKEN>"' : '', oauth ? 'sign in through OAuth' : '']
+        .filter(Boolean)
+        .join(' or ');
+      return jsonError(401, `Missing or invalid credentials: ${ways}.`, {
         'WWW-Authenticate': challenge,
       });
     }
@@ -91,11 +102,16 @@ export function createHttpHandler(options: HttpHandlerOptions = {}): (request: R
   };
 }
 
-/** The static MCP_AUTH_TOKEN (compared in constant time), or a valid OAuth access token. */
-async function isAuthorized(request: Request, expected: string, oauth: OAuthConfig | undefined, nowMs: number): Promise<boolean> {
+/** The static MCP_AUTH_TOKEN when configured (compared in constant time), or a valid OAuth access token. */
+async function isAuthorized(
+  request: Request,
+  expected: string | undefined,
+  oauth: OAuthConfig | undefined,
+  nowMs: number,
+): Promise<boolean> {
   const presented = /^Bearer\s+(.+)$/i.exec(request.headers.get('authorization') ?? '')?.[1]?.trim();
   if (!presented) return false;
-  if (await secretsEqual(presented, expected)) return true;
+  if (expected && (await secretsEqual(presented, expected))) return true;
   return oauth !== undefined && (await isValidAccessToken(presented, oauth, nowMs));
 }
 
