@@ -13,6 +13,19 @@ export interface BinaryResult {
   filename?: string;
 }
 
+/** Thrown by getBinary when a download exceeds `maxBytes`; the body is not read past the limit. */
+export class FileTooLargeError extends Error {
+  override name = 'FileTooLargeError';
+
+  constructor(
+    readonly maxBytes: number,
+    /** From Content-Length when Garmin sent it. */
+    readonly declaredBytes?: number,
+  ) {
+    super(`File is larger than ${maxBytes} bytes.`);
+  }
+}
+
 export interface GarminClientOptions {
   baseUrl: string;
   tokens: TokenManager;
@@ -44,10 +57,10 @@ export class GarminClient {
     }
   }
 
-  /** GET a binary endpoint (activity file download). */
-  async getBinary(path: string, query?: Query): Promise<BinaryResult> {
-    const response = await this.send(path, query, '*/*');
-    const bytes = new Uint8Array(await response.arrayBuffer());
+  /** GET a binary endpoint (activity file download), optionally refusing files over `maxBytes`. */
+  async getBinary(path: string, options: { query?: Query; maxBytes?: number } = {}): Promise<BinaryResult> {
+    const response = await this.send(path, options.query, '*/*');
+    const bytes = await readBody(response, options.maxBytes);
     return {
       bytes,
       contentType: response.headers.get('content-type') ?? 'application/octet-stream',
@@ -102,8 +115,53 @@ export function seg(value: string | number): string {
   return encodeURIComponent(String(value));
 }
 
-function filenameFromDisposition(header: string | null): string | undefined {
+/** Read a body into memory, stopping (and cancelling the download) as soon as it exceeds `maxBytes`. */
+async function readBody(response: Response, maxBytes?: number): Promise<Uint8Array> {
+  if (maxBytes === undefined || !response.body) return new Uint8Array(await response.arrayBuffer());
+
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    await response.body.cancel();
+    throw new FileTooLargeError(maxBytes, declared);
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new FileTooLargeError(maxBytes);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+/**
+ * Filename from Content-Disposition. Only the RFC 5987 `filename*=UTF-8''...` form is
+ * percent-decoded; a plain `filename="run 100%.zip"` is taken literally.
+ */
+export function filenameFromDisposition(header: string | null): string | undefined {
   if (!header) return undefined;
-  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(header);
-  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+  const extended = /filename\*\s*=\s*(?:UTF-8|ISO-8859-1)?'[^']*'([^;]+)/i.exec(header);
+  if (extended?.[1]) {
+    try {
+      return decodeURIComponent(extended[1].trim());
+    } catch {
+      // Malformed percent-encoding: fall back to the plain parameter.
+    }
+  }
+  const plain = /filename\s*=\s*(?:"([^"]*)"|([^;]+))/i.exec(header);
+  const value = (plain?.[1] ?? plain?.[2])?.trim();
+  return value || undefined;
 }

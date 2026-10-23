@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createGarminServer, createToolContext } from '../src/server.js';
+import { safeFilename } from '../src/tools/activities.js';
 import { allTools, runTool } from '../src/tools/index.js';
 import { BASE_URL, json, makeJwt, mockGarmin, type RecordedCall } from './helpers.js';
 
@@ -238,6 +239,40 @@ describe('garmin_download_activity_file', () => {
     expect(Buffer.from(resource?.resource?.blob ?? '', 'base64')).toEqual(Buffer.from([80, 75, 3, 4]));
   });
 
+  it('refuses inline files over 3 MB with a hint to save locally', async () => {
+    const { client } = await connect(() => new Response(new Uint8Array(3 * 1024 * 1024 + 1), { headers: { 'content-type': 'application/zip' } }));
+    const result = await client.callTool({ name: 'garmin_download_activity_file', arguments: { activityId: 7 } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/too large to return inline.*GARMIN_DOWNLOAD_DIR/);
+  });
+
+  it('has no size limit when saving to disk', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'garmin-mcp-'));
+    const big = new Uint8Array(4 * 1024 * 1024);
+    const { client } = await connect(() => new Response(big, { headers: { 'content-type': 'application/zip' } }), { downloadDir: dir });
+    const result = await client.callTool({ name: 'garmin_download_activity_file', arguments: { activityId: 8 } });
+    expect(result.isError ?? false).toBe(false);
+    expect((await readFile(join(dir, 'activity-8.zip'))).byteLength).toBe(big.byteLength);
+  });
+
+  it('keeps server-supplied filenames inside the download dir', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'garmin-mcp-'));
+    const respond = (name: string) => () =>
+      new Response(new Uint8Array([1]), { headers: { 'content-type': 'application/zip', 'content-disposition': `attachment; filename="${name}"` } });
+
+    for (const [name, expected] of [
+      ['..', 'activity-9.zip'],
+      ['../../escape.zip', 'escape.zip'],
+      ['run 100%.zip', 'run 100%.zip'],
+    ] as const) {
+      const { client } = await connect(respond(name), { downloadDir: dir });
+      const result = await client.callTool({ name: 'garmin_download_activity_file', arguments: { activityId: 9 } });
+      expect(textOf(result)).toContain(join(dir, expected));
+      await close?.();
+      close = undefined;
+    }
+  });
+
   it('saves to GARMIN_DOWNLOAD_DIR when configured (stdio)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'garmin-mcp-'));
     const { client } = await connect(zip, { downloadDir: dir });
@@ -332,5 +367,20 @@ describe('network failures become readable tool errors', () => {
     const result = await runTool(allTools.find((t) => t.name === 'garmin_get_user_settings')!, {}, ctx);
     expect(result.isError).toBe(true);
     expect(textOf(result)).toMatch(/refused the Personal API key/);
+  });
+});
+
+describe('safeFilename', () => {
+  it.each([
+    ['report.zip', 'report.zip'],
+    ['../../etc/passwd', 'passwd'],
+    ['C:\\temp\\x.fit', 'x.fit'],
+    ['..', 'fallback.zip'],
+    ['.', 'fallback.zip'],
+    ['  ', 'fallback.zip'],
+    ['a\u0000b.zip', 'ab.zip'],
+    [undefined, 'fallback.zip'],
+  ])('%j -> %j', (input, expected) => {
+    expect(safeFilename(input, 'fallback.zip')).toBe(expected);
   });
 });

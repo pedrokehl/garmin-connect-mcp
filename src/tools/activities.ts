@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { seg } from '../garmin/client.js';
+import { FileTooLargeError, seg } from '../garmin/client.js';
 import { customTool, jsonTool } from './define.js';
 import { activityId, checkRange, date, integer } from './schemas.js';
 
@@ -129,30 +129,35 @@ export const downloadActivityFile = customTool({
   ].join(' '),
   inputSchema: z.object({ activityId }),
   run: async ({ activityId: id }, ctx) => {
-    const file = await ctx.client.getBinary(`/download-service/files/activity/${seg(id)}`);
-    const ext = file.contentType.includes('zip') ? 'zip' : file.contentType.includes('fit') ? 'fit' : 'bin';
-    const filename = file.filename ?? `activity-${id}.${ext}`;
-    const size = `${(file.bytes.byteLength / 1024).toFixed(1)} KB`;
-
-    if (ctx.downloadDir) {
-      await mkdir(ctx.downloadDir, { recursive: true });
-      const target = join(ctx.downloadDir, filename.replace(/[/\\]/g, '_'));
-      await writeFile(target, file.bytes);
-      return { content: [{ type: 'text', text: `Saved activity ${id} (${file.contentType}, ${size}) to ${target}` }] };
-    }
-
-    if (file.bytes.byteLength > MAX_INLINE_DOWNLOAD_BYTES) {
+    const path = `/download-service/files/activity/${seg(id)}`;
+    let file;
+    try {
+      // Saving to disk has no size limit; inline results must fit in one HTTP response.
+      file = await ctx.client.getBinary(path, { maxBytes: ctx.downloadDir ? undefined : MAX_INLINE_DOWNLOAD_BYTES });
+    } catch (error) {
+      if (!(error instanceof FileTooLargeError)) throw error;
+      const size = error.declaredBytes ? `${formatKb(error.declaredBytes)}, ` : '';
       return {
         isError: true,
         content: [
           {
             type: 'text',
             text:
-              `The file for activity ${id} is ${size}, too large to return inline. ` +
+              `The file for activity ${id} is too large to return inline (${size}limit ${formatKb(error.maxBytes)}). ` +
               'Run the server locally (stdio) with GARMIN_DOWNLOAD_DIR set to save it to disk instead.',
           },
         ],
       };
+    }
+    const ext = file.contentType.includes('zip') ? 'zip' : file.contentType.includes('fit') ? 'fit' : 'bin';
+    const filename = safeFilename(file.filename, `activity-${id}.${ext}`);
+    const size = formatKb(file.bytes.byteLength);
+
+    if (ctx.downloadDir) {
+      await mkdir(ctx.downloadDir, { recursive: true });
+      const target = join(ctx.downloadDir, filename);
+      await writeFile(target, file.bytes);
+      return { content: [{ type: 'text', text: `Saved activity ${id} (${file.contentType}, ${size}) to ${target}` }] };
     }
 
     return {
@@ -170,5 +175,19 @@ export const downloadActivityFile = customTool({
     };
   },
 });
+
+function formatKb(bytes: number): string {
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+/**
+ * Reduce a server-supplied filename to a plain file name: last path segment only,
+ * no control characters, and never `.`/`..` or empty.
+ */
+export function safeFilename(name: string | undefined, fallback: string): string {
+  const base = (name ?? '').split(/[/\\]/).pop() ?? '';
+  const cleaned = base.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return cleaned && cleaned !== '.' && cleaned !== '..' ? cleaned : fallback;
+}
 
 export const activityTools = [searchActivities, getActivity, getActivityWorkouts, downloadActivityFile];

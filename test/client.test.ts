@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TokenManager } from '../src/garmin/auth.js';
-import { GarminClient, buildQueryString } from '../src/garmin/client.js';
+import { FileTooLargeError, GarminClient, buildQueryString, filenameFromDisposition } from '../src/garmin/client.js';
 import { GarminApiError } from '../src/garmin/errors.js';
 import { BASE_URL, json, makeJwt, mockGarmin } from './helpers.js';
 
@@ -127,5 +127,55 @@ describe('buildQueryString', () => {
   it('returns an empty string when nothing is set', () => {
     expect(buildQueryString({ a: undefined })).toBe('');
     expect(buildQueryString(undefined)).toBe('');
+  });
+});
+
+describe('filenameFromDisposition', () => {
+  it('takes plain filenames literally, even with %', () => {
+    expect(filenameFromDisposition('attachment; filename="run 100%.zip"')).toBe('run 100%.zip');
+    expect(filenameFromDisposition('attachment; filename=123.zip')).toBe('123.zip');
+  });
+
+  it('decodes RFC 5987 filenames and falls back when they are malformed', () => {
+    expect(filenameFromDisposition("attachment; filename*=UTF-8''caf%C3%A9.zip")).toBe('café.zip');
+    expect(filenameFromDisposition("attachment; filename=\"plain.zip\"; filename*=UTF-8''bad%E0%A4%A.zip")).toBe('plain.zip');
+  });
+
+  it('returns undefined when there is no filename', () => {
+    expect(filenameFromDisposition(null)).toBeUndefined();
+    expect(filenameFromDisposition('inline')).toBeUndefined();
+  });
+});
+
+describe('GarminClient.getBinary size limit', () => {
+  it('refuses early based on Content-Length and cancels the body', async () => {
+    let cancelled = false;
+    const body = new ReadableStream({ cancel: () => void (cancelled = true) });
+    const { client } = setup(() => new Response(body, { headers: { 'content-length': '5000' } }));
+
+    const error = await client.getBinary('/f', { maxBytes: 1000 }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(FileTooLargeError);
+    expect((error as FileTooLargeError).declaredBytes).toBe(5000);
+    expect(cancelled).toBe(true);
+  });
+
+  it('stops reading a stream without Content-Length once it passes the limit', async () => {
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        pulls += 1;
+        controller.enqueue(new Uint8Array(400));
+      },
+    });
+    const { client } = setup(() => new Response(body));
+
+    await expect(client.getBinary('/f', { maxBytes: 1000 })).rejects.toBeInstanceOf(FileTooLargeError);
+    expect(pulls).toBeLessThan(10);
+  });
+
+  it('returns files under the limit', async () => {
+    const { client } = setup(() => new Response(new Uint8Array(999)));
+    expect((await client.getBinary('/f', { maxBytes: 1000 })).bytes.byteLength).toBe(999);
   });
 });
