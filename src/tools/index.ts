@@ -1,4 +1,5 @@
 import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
+import { describeError } from '../garmin/errors.js';
 import { activityTools } from './activities.js';
 import { bodyTools } from './body.js';
 import { dailyTools } from './daily.js';
@@ -56,7 +57,7 @@ export async function runTool(tool: GarminTool, args: unknown, ctx: ToolContext)
     const payload = result.noData ? { noData: true, message: NO_DATA_MESSAGE } : result.data;
     return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
   } catch (error) {
-    return errorResult(error instanceof Error ? error.message : String(error));
+    return errorResult(describeError(error));
   }
 }
 

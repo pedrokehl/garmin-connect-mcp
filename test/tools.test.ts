@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createGarminServer, createToolContext } from '../src/server.js';
-import { allTools } from '../src/tools/index.js';
-import { BASE_URL, json, mockGarmin, type RecordedCall } from './helpers.js';
+import { allTools, runTool } from '../src/tools/index.js';
+import { BASE_URL, json, makeJwt, mockGarmin, type RecordedCall } from './helpers.js';
 
 /** Every operation in Garmin's Personal API OpenAPI spec (v1.0.0). */
 const SPEC_ENDPOINTS = [
@@ -300,5 +300,37 @@ describe('numeric inputs are strict', () => {
     const { client, garmin } = await connect(() => json({}));
     await client.callTool({ name: 'garmin_get_activity', arguments: { activityId: '21474836470' } });
     expect(garmin.dataCalls()[0]?.url).toBe(`${BASE_URL}/activity-service/activity/21474836470`);
+  });
+});
+
+describe('network failures become readable tool errors', () => {
+  it('reports a timeout', async () => {
+    const { client } = await connect(() => {
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    });
+    const result = await client.callTool({ name: 'garmin_get_user_settings', arguments: {} });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/did not respond within 12 seconds/);
+  });
+
+  it('reports an unreachable host', async () => {
+    const { client } = await connect(() => {
+      throw new TypeError('fetch failed', { cause: new Error('getaddrinfo ENOTFOUND personal.connectapi.garmin.com') });
+    });
+    const result = await client.callTool({ name: 'garmin_get_user_settings', arguments: {} });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/Could not reach Garmin \(getaddrinfo ENOTFOUND/);
+  });
+
+  it('reports a key refused while retrying after a 401', async () => {
+    let tokenCalls = 0;
+    const garmin = mockGarmin(
+      () => new Response('revoked', { status: 401 }),
+      () => (++tokenCalls === 1 ? new Response(makeJwt(Math.floor(Date.now() / 1000) + 86_400)) : new Response('key deleted', { status: 401 })),
+    );
+    const ctx = createToolContext({ apiKey: 'k', baseUrl: BASE_URL }, { fetch: garmin.fetch });
+    const result = await runTool(allTools.find((t) => t.name === 'garmin_get_user_settings')!, {}, ctx);
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/refused the Personal API key/);
   });
 });

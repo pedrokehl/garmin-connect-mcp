@@ -1,4 +1,4 @@
-import { GarminApiError } from './errors.js';
+import { GARMIN_TIMEOUT_MS, GarminApiError } from './errors.js';
 
 export const TOKEN_PATH = '/personalapitoken-service/personal-api/personal-api-key/token';
 
@@ -8,7 +8,6 @@ const REFRESH_WINDOW_MS = 60 * 60 * 1000;
 const FALLBACK_LIFETIME_MS = 23 * 60 * 60 * 1000;
 /** If `exp` is already past by our clock (clock skew), keep using the token this long; a 401 still forces a new one. */
 const SKEWED_TOKEN_REUSE_MS = 5 * 60 * 1000;
-const REQUEST_TIMEOUT_MS = 30_000;
 const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
 
 export interface AccessToken {
@@ -70,7 +69,7 @@ export class TokenManager {
     const response = await this.fetchFn(this.baseUrl + TOKEN_PATH, {
       method: 'POST',
       headers: { Accept: '*/*', Authorization: `ApiKey ${this.apiKey}` },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(GARMIN_TIMEOUT_MS),
     });
     const text = await response.text();
     if (!response.ok) {

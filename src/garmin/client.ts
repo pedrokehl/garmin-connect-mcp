@@ -1,7 +1,6 @@
 import type { TokenManager } from './auth.js';
-import { GarminApiError } from './errors.js';
+import { GARMIN_TIMEOUT_MS, GarminApiError } from './errors.js';
 
-const REQUEST_TIMEOUT_MS = 30_000;
 
 export type QueryValue = string | number | boolean | readonly (string | number)[] | null | undefined;
 export type Query = Record<string, QueryValue>;
@@ -76,7 +75,7 @@ export class GarminClient {
     const response = await this.fetchFn(url, {
       method: 'GET',
       headers: { Accept: accept, Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(GARMIN_TIMEOUT_MS),
     });
     return { response, token };
   }

@@ -2,6 +2,13 @@ import { API_KEY_SETTINGS_URL } from '../config.js';
 
 const MAX_BODY_CHARS = 500;
 
+/**
+ * Per-request timeout for every call to Garmin, including reading the body. A tool
+ * call makes at most four requests (token, data, and after a 401 token + data again),
+ * so 4 × 12s stays under the 60s Vercel function limit set in vercel.json.
+ */
+export const GARMIN_TIMEOUT_MS = 12_000;
+
 /** A non-2xx response from Garmin, with a message an LLM (or a human) can act on. */
 export class GarminApiError extends Error {
   override name = 'GarminApiError';
@@ -47,4 +54,20 @@ function describeStatus(status: number, method: string, path: string, body: stri
 function truncate(text: string): string {
   const oneLine = text.replace(/\s+/g, ' ').trim();
   return oneLine.length > MAX_BODY_CHARS ? `${oneLine.slice(0, MAX_BODY_CHARS)}…` : oneLine;
+}
+
+/** Turn anything thrown while talking to Garmin into a message a model can act on. */
+export function describeError(error: unknown): string {
+  if (error instanceof GarminApiError) return error.message;
+  if (error instanceof Error) {
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+      return `Garmin did not respond within ${GARMIN_TIMEOUT_MS / 1000} seconds. Try again in a moment, or request a smaller date range.`;
+    }
+    if (error instanceof TypeError && /fetch failed|network/i.test(error.message)) {
+      const cause = error.cause instanceof Error ? ` (${error.cause.message})` : '';
+      return `Could not reach Garmin${cause}. Check the network connection and try again.`;
+    }
+    return error.message;
+  }
+  return String(error);
 }

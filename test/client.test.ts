@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TokenManager } from '../src/garmin/auth.js';
 import { GarminClient, buildQueryString } from '../src/garmin/client.js';
 import { GarminApiError } from '../src/garmin/errors.js';
-import { BASE_URL, json, mockGarmin } from './helpers.js';
+import { BASE_URL, json, makeJwt, mockGarmin } from './helpers.js';
 
 function setup(onData: Parameters<typeof mockGarmin>[0]) {
   const garmin = mockGarmin(onData);
@@ -21,6 +21,31 @@ describe('GarminClient.getJson', () => {
     const [call] = garmin.dataCalls();
     expect(call?.headers.authorization).toMatch(/^Bearer ey/);
     expect(call?.url).toBe(`${BASE_URL}/userprofile-service/userprofile/settings`);
+  });
+
+  it('puts a timeout on every request to Garmin', async () => {
+    const signals: (AbortSignal | null | undefined)[] = [];
+    const tokens = new TokenManager({
+      apiKey: 'k',
+      baseUrl: BASE_URL,
+      fetch: (async (_url: string, init?: RequestInit) => {
+        signals.push(init?.signal);
+        return new Response(makeJwt(Math.floor(Date.now() / 1000) + 86_400));
+      }) as typeof fetch,
+    });
+    const client = new GarminClient({
+      baseUrl: BASE_URL,
+      tokens,
+      fetch: (async (_url: string, init?: RequestInit) => {
+        signals.push(init?.signal);
+        return json({});
+      }) as typeof fetch,
+    });
+
+    await client.getJson('/x');
+
+    expect(signals).toHaveLength(2);
+    for (const signal of signals) expect(signal).toBeInstanceOf(AbortSignal);
   });
 
   it('maps 204 No Content to noData', async () => {
