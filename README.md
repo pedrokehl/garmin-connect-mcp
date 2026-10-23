@@ -29,6 +29,8 @@ openssl rand -base64 32
 
 Your server is now at `https://<your-project>.vercel.app/mcp`. Vercel's free Hobby plan is enough.
 
+**Recommended:** the deploy button can't create [sensitive variables](https://vercel.com/docs/environment-variables/sensitive-environment-variables), whose values can never be read back from the dashboard or CLI. To protect them, open **Settings → Environment Variables** and recreate both with **Sensitive** turned on, then redeploy. Team owners can instead turn on **Enforce Sensitive Environment Variables** under Security & Privacy *before* deploying, so new variables are sensitive from the start.
+
 **4. Connect your MCP client.**
 
 Claude Code:
