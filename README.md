@@ -1,6 +1,6 @@
 # Garmin Connect MCP
 
-Let Claude, Cursor or any [MCP](https://modelcontextprotocol.io) client read **your own** Garmin data (activities, sleep, HRV, Body Battery, stress, steps, heart rate, weight and more) through Garmin's official [Connect Personal API](https://developer.garmin.com/gc-developer-program/personal/personal-api).
+Let Claude, Gemini, ChatGPT or any other [MCP](https://modelcontextprotocol.io) client read **your own** Garmin data (activities, sleep, HRV, Body Battery, stress, steps, heart rate, weight and more) through Garmin's official [Connect Personal API](https://developer.garmin.com/gc-developer-program/personal/personal-api).
 
 > "How did I sleep this week compared to last week?" · "Summarize my last five runs." · "Which days this month did I miss my step goal?"
 
@@ -12,80 +12,51 @@ It exposes all 26 Personal API endpoints as read-only tools, and you can host it
 
 **1. Create a Garmin API key.** In Garmin Connect on the web, open [Settings → Personal API Token](https://connect.garmin.com/app/settings/personalApiToken), select **Create Key** and copy it. Garmin shows it only once.
 
-**2. Generate a secret** to protect your server:
+**2. Generate two secrets.** Run this twice:
 
 ```bash
 openssl rand -base64 32
 ```
 
-**3. Deploy** with the button for the app you use, and paste the key and the secret when Vercel asks:
+**3. Deploy** and fill in the variables when Vercel asks:
 
-| You use | Deploy | The secret goes in |
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fpedrokehl%2Fgarmin-connect-mcp&env=GARMIN_API_KEY,MCP_OAUTH_CLIENT_SECRET,MCP_AUTH_TOKEN,MCP_OAUTH_CLIENT_ID&envDefaults=%7B%22MCP_OAUTH_CLIENT_ID%22%3A%22garmin-mcp%22%7D&envDescription=GARMIN_API_KEY%3A%20your%20Garmin%20Personal%20API%20key.%20MCP_OAUTH_CLIENT_SECRET%20and%20MCP_AUTH_TOKEN%3A%20two%20different%20random%20secrets%20of%2024%2B%20characters.%20MCP_OAUTH_CLIENT_ID%3A%20keep%20garmin-mcp.&envLink=https%3A%2F%2Fgithub.com%2Fpedrokehl%2Fgarmin-connect-mcp%23environment-variables&project-name=garmin-connect-mcp&repository-name=garmin-connect-mcp)
+
+### Environment variables
+
+| Variable | Value | What it's for |
 |---|---|---|
-| Gemini, claude.ai / Claude Desktop, or ChatGPT | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fpedrokehl%2Fgarmin-connect-mcp&env=GARMIN_API_KEY,MCP_OAUTH_CLIENT_SECRET&envDescription=GARMIN_API_KEY%3A%20your%20Garmin%20Connect%20Personal%20API%20key.%20MCP_OAUTH_CLIENT_SECRET%3A%20a%20random%20secret%20of%2024%2B%20characters%3B%20enter%20it%20in%20the%20Gemini%20app%20or%20claude.ai%20together%20with%20the%20client%20ID%20garmin-mcp.&envLink=https%3A%2F%2Fgithub.com%2Fpedrokehl%2Fgarmin-connect-mcp%2Fblob%2Fmain%2Fdocs%2Fdeployment.md%23configuration&project-name=garmin-connect-mcp&repository-name=garmin-connect-mcp) | `MCP_OAUTH_CLIENT_SECRET` |
-| Claude Code, Cursor, VS Code, Gemini CLI, or another client that can send headers | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fpedrokehl%2Fgarmin-connect-mcp&env=GARMIN_API_KEY,MCP_AUTH_TOKEN&envDescription=GARMIN_API_KEY%3A%20your%20Garmin%20Connect%20Personal%20API%20key.%20MCP_AUTH_TOKEN%3A%20a%20random%20secret%20of%2024%2B%20characters%20that%20clients%20send%20as%20a%20bearer%20token.&envLink=https%3A%2F%2Fgithub.com%2Fpedrokehl%2Fgarmin-connect-mcp%2Fblob%2Fmain%2Fdocs%2Fdeployment.md%23configuration&project-name=garmin-connect-mcp&repository-name=garmin-connect-mcp) | `MCP_AUTH_TOKEN` |
+| `GARMIN_API_KEY` | The key from step 1 | Reads your Garmin data. Required. |
+| `MCP_OAUTH_CLIENT_SECRET` | First secret from step 2 | The **client secret** you enter in Claude, Gemini or ChatGPT. |
+| `MCP_AUTH_TOKEN` | Second secret from step 2 | The password you type on your server's sign-in page. Also lets header-based clients like Claude Code connect directly. |
+| `MCP_OAUTH_CLIENT_ID` | `garmin-mcp` (pre-filled) | The **client ID** you enter in the app. Keep the default. |
+| `MCP_OAUTH_REDIRECT_URIS` | Optional, add later if needed | Extra allowed sign-in callback URLs, comma-separated. Claude's, Gemini's and ChatGPT's are already allowed. |
 
-Your server is now at `https://<your-project>.vercel.app/mcp`. Vercel's free Hobby plan is enough. You can use both kinds of client: add the other variable later under **Settings → Environment Variables** and redeploy.
+`MCP_OAUTH_CLIENT_SECRET` and `MCP_AUTH_TOKEN` are each optional, but at least one must be set. Without `MCP_AUTH_TOKEN`, the sign-in page asks for the client secret instead.
 
-**Recommended:** the deploy button can't create [sensitive variables](https://vercel.com/docs/environment-variables/sensitive-environment-variables), whose values can never be read back from the dashboard or CLI. To protect them, recreate them under **Settings → Environment Variables** with **Sensitive** turned on, then redeploy. Team owners can instead turn on **Enforce Sensitive Environment Variables** under Security & Privacy *before* deploying.
+Your server is now at `https://<your-project>.vercel.app/mcp`. Vercel's free Hobby plan is enough. Recommended: under **Settings → Environment Variables**, recreate the two secrets as [Sensitive](https://vercel.com/docs/environment-variables/sensitive-environment-variables) (their values can't be read back afterwards), then redeploy. The deploy button can't do this for you.
 
-**4. Connect your app** to `https://<your-project>.vercel.app/mcp`:
+**4. Connect your app.** Add a custom connector with:
 
-| App | Signs in with | Needs |
-|---|---|---|
-| Gemini app | OAuth | `MCP_OAUTH_CLIENT_SECRET` |
-| claude.ai and Claude Desktop | OAuth | `MCP_OAUTH_CLIENT_SECRET` |
-| ChatGPT | OAuth | `MCP_OAUTH_CLIENT_SECRET` |
-| Claude Code, Cursor, VS Code, Gemini CLI | Bearer header | `MCP_AUTH_TOKEN` |
+| Field | Value |
+|---|---|
+| Server URL | `https://<your-project>.vercel.app/mcp` |
+| Client ID | `garmin-mcp` |
+| Client secret | Your `MCP_OAUTH_CLIENT_SECRET` |
 
-### Gemini, Claude and ChatGPT (OAuth)
+- **Claude** (claude.ai and Claude Desktop): Settings → Connectors → Add custom connector. The client ID and secret go under Advanced settings.
+- **Gemini**: add a custom MCP connector and fill in Client ID and Client secret. If it also asks for URLs, use `https://<your-project>.vercel.app/oauth/authorize` (authorization), `https://<your-project>.vercel.app/oauth/token` (token) and scope `garmin:read`.
+- **ChatGPT**: create a connector in developer mode (on plans that offer custom connectors), choose OAuth with a user-defined OAuth client, and leave the registration URL empty.
 
-1. Add a custom connector (MCP server) with the server URL, client ID `garmin-mcp`, and your `MCP_OAUTH_CLIENT_SECRET` as the client secret:
-   - **Gemini:** fill in Client ID and Client secret. If it also asks for URLs, use `https://<your-project>.vercel.app/oauth/authorize` (authorization) and `https://<your-project>.vercel.app/oauth/token` (token), with scope `garmin:read`.
-   - **claude.ai and Claude Desktop:** Settings → Connectors → Add custom connector. The client ID and secret go under Advanced settings.
-   - **ChatGPT:** create a connector in developer mode (on plans that offer custom connectors), choose OAuth, and enter the client ID and secret as a user-defined OAuth client. Leave the registration URL empty.
-2. A sign-in page from your own server opens. Paste the same client secret (or `MCP_AUTH_TOKEN`, if you set both) and select **Allow access**.
+A sign-in page from your own server then opens: paste your `MCP_AUTH_TOKEN` and select **Allow access**. If it says a redirect URL isn't allowed, add that URL to `MCP_OAUTH_REDIRECT_URIS` and redeploy.
 
-Gemini's, Claude's and ChatGPT's callback URLs are allowed by default. If the sign-in page says a redirect URL isn't allowed (for example, another app), add the URL it shows to an `MCP_OAUTH_REDIRECT_URIS` variable in Vercel and redeploy. Apps that can only register themselves automatically (dynamic client registration) and can't take a client ID and secret aren't supported; use their header option if they have one.
-
-### Claude Code, Cursor, VS Code and Gemini CLI (bearer header)
-
-Claude Code:
+**Claude Code** connects with the token directly:
 
 ```bash
 claude mcp add --transport http garmin https://<your-project>.vercel.app/mcp --header "Authorization: Bearer <MCP_AUTH_TOKEN>"
 ```
 
-Cursor (`~/.cursor/mcp.json`) and Gemini CLI (`~/.gemini/settings.json`; use `httpUrl` instead of `url`):
-
-```json
-{
-  "mcpServers": {
-    "garmin": {
-      "url": "https://<your-project>.vercel.app/mcp",
-      "headers": { "Authorization": "Bearer <MCP_AUTH_TOKEN>" }
-    }
-  }
-}
-```
-
-VS Code (`.vscode/mcp.json`):
-
-```json
-{
-  "servers": {
-    "garmin": {
-      "type": "http",
-      "url": "https://<your-project>.vercel.app/mcp",
-      "headers": { "Authorization": "Bearer <MCP_AUTH_TOKEN>" }
-    }
-  }
-}
-```
-
-Any other client that only runs local commands can connect through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote): `npx -y mcp-remote https://<your-project>.vercel.app/mcp --header "Authorization: Bearer <MCP_AUTH_TOKEN>"`.
-
-To run it locally instead (the most private option), or to deploy elsewhere (Cloudflare, Netlify, Deno), see [docs/deployment.md](docs/deployment.md).
+Other clients, running locally, and other hosts: see [docs/deployment.md](docs/deployment.md).
 
 ## Tools
 

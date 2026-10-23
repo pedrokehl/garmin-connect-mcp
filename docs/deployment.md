@@ -1,8 +1,9 @@
 # Running and deploying
 
-The [README](../README.md) covers the one-click Vercel setup. This page covers everything else: running locally, deploying Vercel from the CLI, other hosts, and troubleshooting.
+The [README](../README.md) covers the one-click Vercel setup and connecting Claude, Gemini and ChatGPT. This page covers everything else: other clients, running locally, deploying Vercel from the CLI, other hosts, and troubleshooting.
 
 - [Configuration](#configuration)
+- [Other clients (bearer header)](#other-clients-bearer-header)
 - [Run locally (stdio)](#run-locally-stdio)
 - [Vercel from the CLI](#vercel-from-the-cli)
 - [Other hosts](#other-hosts): Cloudflare Workers, Netlify Functions, Deno Deploy
@@ -21,6 +22,45 @@ All configuration is done with environment variables. For local development, cop
 | `MCP_OAUTH_REDIRECT_URIS` | No | HTTP | Extra allowed OAuth callback URLs, comma-separated. Allowed by default: claude.ai, ChatGPT, Gemini app connectors (Google's `oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-…` relay), Gemini Enterprise and loopback (`http://localhost:*`). |
 | `GARMIN_API_BASE_URL` | No | both | Override the API host. Default: `https://personal.connectapi.garmin.com`. |
 | `GARMIN_DOWNLOAD_DIR` | No | stdio only | If set, `garmin_download_activity_file` saves files to this folder (supports `~`) and returns the path instead of returning the file inline. |
+
+## Other clients (bearer header)
+
+Clients that can send an HTTP header use `MCP_AUTH_TOKEN` directly, with no sign-in page.
+
+Cursor (`~/.cursor/mcp.json`) and Gemini CLI (`~/.gemini/settings.json`; use `httpUrl` instead of `url`):
+
+```json
+{
+  "mcpServers": {
+    "garmin": {
+      "url": "https://<your-project>.vercel.app/mcp",
+      "headers": { "Authorization": "Bearer <MCP_AUTH_TOKEN>" }
+    }
+  }
+}
+```
+
+VS Code (`.vscode/mcp.json`):
+
+```json
+{
+  "servers": {
+    "garmin": {
+      "type": "http",
+      "url": "https://<your-project>.vercel.app/mcp",
+      "headers": { "Authorization": "Bearer <MCP_AUTH_TOKEN>" }
+    }
+  }
+}
+```
+
+Any client that only runs local commands can connect through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+
+```bash
+npx -y mcp-remote https://<your-project>.vercel.app/mcp --header "Authorization: Bearer <MCP_AUTH_TOKEN>"
+```
+
+Apps that can only register themselves automatically (dynamic client registration) and can't take a client ID and secret aren't supported; use their header option if they have one.
 
 ## Run locally (stdio)
 
