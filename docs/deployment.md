@@ -18,7 +18,7 @@ All configuration is done with environment variables. For local development, cop
 | `MCP_AUTH_TOKEN` | **This and/or the next, for HTTP** | HTTP | Enables header-based clients (Claude Code, Cursor, Gemini CLI, `mcp-remote`), which send it as `Authorization: Bearer <token>`. At least 24 characters; generate one with `openssl rand -base64 32`. If neither this nor `MCP_OAUTH_CLIENT_SECRET` is set, the HTTP server refuses every request. |
 | `MCP_OAUTH_CLIENT_SECRET` | **This and/or the previous, for HTTP** | HTTP | Enables the built-in OAuth sign-in (the Gemini app, claude.ai). At least 24 characters. Enter it in the app together with the client ID `garmin-mcp`. The sign-in page asks for `MCP_AUTH_TOKEN` if it is set, otherwise for this secret. |
 | `MCP_OAUTH_CLIENT_ID` | No | HTTP | Overrides the OAuth client ID (default `garmin-mcp`). Only takes effect with a client secret set. |
-| `MCP_OAUTH_REDIRECT_URIS` | No | HTTP | Extra allowed OAuth callback URLs, comma-separated. claude.ai's, Gemini Enterprise's and loopback (`http://localhost:*`) callbacks are allowed by default. |
+| `MCP_OAUTH_REDIRECT_URIS` | No | HTTP | Extra allowed OAuth callback URLs, comma-separated. Allowed by default: claude.ai, ChatGPT, Gemini app connectors (Google's `oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-…` relay), Gemini Enterprise and loopback (`http://localhost:*`). |
 | `GARMIN_API_BASE_URL` | No | both | Override the API host. Default: `https://personal.connectapi.garmin.com`. |
 | `GARMIN_DOWNLOAD_DIR` | No | stdio only | If set, `garmin_download_activity_file` saves files to this folder (supports `~`) and returns the path instead of returning the file inline. |
 
