@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createGarminServer, createToolContext } from '../src/server.js';
+import { createGarminServer, createToolContext } from '../src/mcp-server.js';
 import { createFileSaver } from '../src/local-files.js';
 import { safeFilename } from '../src/tools/activities.js';
 import { allTools, runTool } from '../src/tools/index.js';

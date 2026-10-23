@@ -30,7 +30,7 @@ src/tools/<area>.ts             tool definitions (profile, activities, daily, sl
 src/tools/index.ts              allTools[], registerAllTools(), runTool() (validate → call → shape, never throws)
          │
          ▼
-src/server.ts                   createToolContext() (long-lived: token cache, today(), optional saveFile) + createGarminServer() (cheap, per request)
+src/mcp-server.ts               createToolContext() (long-lived: token cache, today(), optional saveFile) + createGarminServer() (cheap, per request)
          │
          ├─► src/stdio.ts       serveStdio(); local today(); saveFile from src/local-files.ts (the only Node-only module)
          └─► src/http.ts        createHttpHandler(): auth gate → createMcpHandler(); web-standard Request → Response

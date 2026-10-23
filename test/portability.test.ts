@@ -88,4 +88,26 @@ describe('Vercel config', () => {
     await expect(readFile(join(root, config.outputDirectory!, 'index.html'), 'utf8')).resolves.toContain('<html');
     expect(config.functions?.['api/mcp.ts']?.maxDuration).toBeGreaterThanOrEqual(60);
   });
+
+  it('pins the framework preset to "Other" so Vercel serves api/ functions', async () => {
+    const config = JSON.parse(await readFile(join(resolve(SRC, '..'), 'vercel.json'), 'utf8')) as { framework?: unknown };
+    expect(config).toHaveProperty('framework', null);
+  });
+
+  it('has no file Vercel would mistake for a Node server entrypoint', async () => {
+    // Vercel's "Node" preset is detected from the mere presence of server.* or src/server.*,
+    // and its builder then runs that file as the app ("default export must be a function or
+    // server"). The other backend presets also look for app/index/main.
+    const root = resolve(SRC, '..');
+    const names = ['app', 'index', 'server', 'main'].flatMap((n) => [n, `src/${n}`]);
+    const extensions = ['js', 'cjs', 'mjs', 'ts', 'cts', 'mts'];
+    const found: string[] = [];
+    for (const name of names) {
+      for (const ext of extensions) {
+        const file = `${name}.${ext}`;
+        if (await readFile(join(root, file)).then(() => true, () => false)) found.push(file);
+      }
+    }
+    expect(found).toEqual([]);
+  });
 });

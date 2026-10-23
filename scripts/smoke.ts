@@ -6,7 +6,7 @@
 import { Client } from '@modelcontextprotocol/client';
 import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { loadGarminConfig } from '../src/config.js';
-import { createGarminServer, createToolContext } from '../src/server.js';
+import { createGarminServer, createToolContext } from '../src/mcp-server.js';
 import { allTools } from '../src/tools/index.js';
 import { localToday } from '../src/tools/schemas.js';
 

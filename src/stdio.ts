@@ -6,7 +6,7 @@
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { ConfigError, loadGarminConfig } from './config.js';
 import { createFileSaver } from './local-files.js';
-import { createGarminServer, createToolContext } from './server.js';
+import { createGarminServer, createToolContext } from './mcp-server.js';
 import { localToday } from './tools/schemas.js';
 
 try {

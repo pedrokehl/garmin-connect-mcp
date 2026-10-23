@@ -7,7 +7,7 @@
  */
 import { createMcpHandler, type McpHttpHandler } from '@modelcontextprotocol/server';
 import { ConfigError, loadGarminConfig, processEnv } from './config.js';
-import { SERVER_NAME, createGarminServer, createToolContext } from './server.js';
+import { SERVER_NAME, createGarminServer, createToolContext } from './mcp-server.js';
 
 /** Shorter shared secrets are refused: the token is the only thing protecting your data. */
 export const MIN_AUTH_TOKEN_LENGTH = 24;
