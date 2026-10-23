@@ -17,9 +17,11 @@ It is built on **MCP TypeScript SDK v2** (`@modelcontextprotocol/server`, spec 2
 env ─► src/config.ts            loadGarminConfig(): GARMIN_API_KEY, GARMIN_API_BASE_URL, GARMIN_DOWNLOAD_DIR
          │
          ▼
-src/garmin/auth.ts              TokenManager: key → JWT exchange, in-memory cache, single-flight refresh
-src/garmin/client.ts            GarminClient: GET with Bearer, 401 → refresh + retry once, 204 → noData, query encoding
-src/garmin/errors.ts            GarminApiError: status → actionable message (never includes secrets)
+src/garmin/auth.ts              TokenManager: key → JWT exchange (shape-checked), per-token refresh time, single-flight, invalidate(rejected)
+src/garmin/client.ts            GarminClient: GET with Bearer, 401 → refresh + retry once, 204 → noData, query encoding,
+                                getBinary with a streamed size cap (FileTooLargeError)
+src/garmin/errors.ts            GarminApiError, describeError() (timeouts/network → readable text), GARMIN_TIMEOUT_MS (12s)
+src/encoding.ts                 atob/btoa base64 helpers (no Buffer on the HTTP path)
          │
          ▼
 src/tools/define.ts             jsonTool()/customTool() registry types
@@ -28,11 +30,12 @@ src/tools/<area>.ts             tool definitions (profile, activities, daily, sl
 src/tools/index.ts              allTools[], registerAllTools(), runTool() (validate → call → shape, never throws)
          │
          ▼
-src/server.ts                   createToolContext() (long-lived: token cache) + createGarminServer() (cheap, per request)
+src/server.ts                   createToolContext() (long-lived: token cache, today(), optional saveFile) + createGarminServer() (cheap, per request)
          │
-         ├─► src/stdio.ts       serveStdio(); download dir allowed
+         ├─► src/stdio.ts       serveStdio(); local today(); saveFile from src/local-files.ts (the only Node-only module)
          └─► src/http.ts        createHttpHandler(): auth gate → createMcpHandler(); web-standard Request → Response
-                └─► api/mcp.ts  Vercel Function (GET/POST/DELETE), vercel.json rewrites /mcp → /api/mcp
+                └─► api/mcp.ts  Vercel Function (GET/POST/DELETE), vercel.json rewrites /mcp → /api/mcp,
+                                outputDirectory public/ (required: Vercel fails the build without a static output folder)
 ```
 
 The tool context is created **once per process** so the 24h Garmin token survives across requests. The `McpServer` itself is created per request (HTTP) or per connection (stdio).
@@ -43,6 +46,7 @@ The tool context is created **once per process** so the 24h Garmin token survive
 |---|---|
 | Install | `npm install` (also builds, through `prepare`) |
 | Build | `npm run build` (tsc → `dist/`) |
+| Vercel build check (offline) | Create a git-ignored `.vercel/project.json` containing `{"projectId":"local","orgId":"local","settings":{"framework":null}}`, then run `npx vercel build`. It must print `Build completed successfully` |
 | Typecheck | `npm run typecheck` |
 | Unit/integration tests | `npm test` (vitest, Garmin fully mocked, no network) |
 | Run stdio from source | `GARMIN_API_KEY=… npm run dev` |
@@ -72,9 +76,9 @@ When Garmin adds or changes an endpoint:
 1. Add or edit the definition in the matching `src/tools/<area>.ts` with `jsonTool({...})`. Use `customTool` only for non-JSON responses, like the file download.
    - `name`: `garmin_<verb>_<thing>`, snake_case.
    - `endpoint`: exactly `GET /path/{param}` as written in the spec. Tests compare against this.
-   - `inputSchema`: a `z.object` whose fields all have `.describe()`. Reuse `date()`, `startDate()`, `endDate()` and `activityId` from `schemas.ts`. Keep Garmin's parameter names.
+   - `inputSchema`: a `z.object` whose fields all have `.describe()`. Reuse `date()`, `startDate()`, `endDate()`, `integer()` and `activityId` from `schemas.ts`. Keep Garmin's parameter names. Optional fields use `.nullish()` (models send `null` for "not set"). **Never use `z.coerce`**: it turns `null`/`""`/`false` into 0 and silently changes the request.
    - `validate`: use `checkRange(start, end, maxDays)` when the spec documents a maximum span.
-   - `request`: build the path with `seg()` for path params. Query values that are `undefined` are dropped automatically, and arrays are repeated.
+   - `request(args, ctx)`: build the path with `seg()` for path params. Query values that are `undefined` or `null` are dropped automatically, and arrays are repeated. Use `ctx.today()` if a default date is unavoidable.
 2. If it is a new area file, add it to `allTools` in `src/tools/index.ts`.
 3. Update `test/tools.test.ts`: add the endpoint to `SPEC_ENDPOINTS` and a sample to `CASES`. The tests fail until both are present. Then update the tool count (26) in the tests and the README.
 4. Add the tool to the **Tool reference** in `README.md`.
@@ -95,7 +99,8 @@ Tool descriptions are the product: the model chooses tools from them. Each descr
 - **Never log or return secrets.** That covers `GARMIN_API_KEY`, `MCP_AUTH_TOKEN` and access tokens. Use stderr for diagnostics in stdio mode, because stdout carries the protocol.
 - **Tools never throw.** `runTool` turns validation and API failures into `isError: true` results with actionable text.
 - **HTTP fails closed.** Don't weaken the auth gate in `src/http.ts`. A missing or short `MCP_AUTH_TOKEN` must keep returning 500.
-- **Portability:** `src/http.ts` must stay web-standard (Fetch API, `crypto.subtle`) so it runs on Vercel, Workers, Netlify and Deno. Node-only APIs belong in stdio-only paths.
-- **Dates** are `YYYY-MM-DD` in the user's local calendar. Don't silently default dates to "today" on the server (the server's time zone is UTC). The only exception is `todayDate` for the menstrual day view, which is documented.
+- **Portability:** everything reachable from `src/http.ts` must stay web-standard (Fetch API, `crypto.subtle`, `atob`/`btoa`) so it runs on Vercel, Workers, Netlify and Deno. Node-only code (`node:*`, `Buffer`, `process.env`) belongs in `src/stdio.ts` or `src/local-files.ts`. `test/portability.test.ts` walks the import graph and fails otherwise.
+- **Dates** are `YYYY-MM-DD` in the user's local calendar. Don't silently default dates to "today". The only exception is `todayDate` for the menstrual day view: it uses `ctx.today()`, which is the local date in stdio and UTC when hosted.
+- **Timeouts:** every request to Garmin uses `GARMIN_TIMEOUT_MS` (12s). A tool call makes at most four requests, so keep 4 × timeout under `maxDuration` in `vercel.json` (60s).
 - **Style:** TypeScript strict, ESM with `.js` import suffixes, 2-space indent, single quotes. Match the surrounding code.
-- **Git:** commits in this repo use the author email `pedrokehl@hotmail.com`. It is set in the repo-local git config; don't change it. Keep commits small and focused, with an imperative subject line.
+- **Git:** commits in this repo use the author email `pedrokehl@hotmail.com`. It is set in the repo-local git config; don't change it. Don't add `Co-Authored-By` or any other AI attribution trailer. Keep commits small and focused, with an imperative subject line.

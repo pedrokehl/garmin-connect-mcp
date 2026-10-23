@@ -163,7 +163,7 @@ vercel deploy --prod
 Your endpoint is `https://<project>.vercel.app/mcp` (or `/api/mcp`).
 
 Notes:
-- [`api/mcp.ts`](api/mcp.ts) is the Vercel Function. [`vercel.json`](vercel.json) sets `maxDuration: 60` and rewrites `/mcp` to it.
+- [`api/mcp.ts`](api/mcp.ts) is the Vercel Function. [`vercel.json`](vercel.json) sets `maxDuration: 60`, rewrites `/mcp` to it, and serves [`public/`](public/index.html), a small landing page at `/`. Vercel needs a static output folder even for function-only projects.
 - Use the **production** domain. On Vercel, preview deployments are behind Vercel Authentication by default.
 - After rotating your Garmin key, update `GARMIN_API_KEY` and redeploy. The cached token is per instance and expires with the old key.
 - Inline file downloads are capped at about 3 MB because of Vercel's 4.5 MB response limit. Larger FIT/ZIP files need the local server with `GARMIN_DOWNLOAD_DIR`.
@@ -223,13 +223,27 @@ Set `GARMIN_API_KEY` and `MCP_AUTH_TOKEN` under **Site configuration → Environ
 
 ### Deno Deploy (free tier)
 
+Create `main.ts`:
+
 ```ts
 import { createHttpHandler } from './src/http.ts';
 
 Deno.serve(createHttpHandler({ env: Deno.env.toObject() }));
 ```
 
-The Cloudflare, Netlify and Deno snippets reuse the same handler, but the automated tests here exercise only the Vercel entrypoint and stdio.
+and a `deno.json`. The sources use Node-style `.js` import suffixes, which Deno only resolves with sloppy imports:
+
+```json
+{ "unstable": ["sloppy-imports"] }
+```
+
+Run it locally with `deno run --allow-env --allow-net --allow-read main.ts`, or deploy the folder to Deno Deploy with the two environment variables set.
+
+**What has been verified:**
+- `vercel build` succeeds, and the built function was exercised with real requests.
+- The Deno setup above was run and called over HTTP with Deno 2.5.
+- The unit tests run the shared handler ([`src/http.ts`](src/http.ts)) in Node. They also check that nothing it imports uses Node-only APIs.
+- The Cloudflare and Netlify snippets use the same handler, but have not been deployed.
 
 ## Connect a client to a deployed server
 
@@ -261,7 +275,7 @@ claude mcp add --transport http garmin https://your-app.vercel.app/mcp --header 
 
 ## Tool reference
 
-Every tool is read-only (`readOnlyHint: true`). Dates are `YYYY-MM-DD` in the user's **local** calendar. Ranges are inclusive. Results are Garmin's JSON as-is. When nothing was recorded, the result is `{"noData": true, ...}`, which is not an error.
+Every tool is read-only (`readOnlyHint: true`). Dates are `YYYY-MM-DD` in the user's **local** calendar. Ranges are inclusive. Optional inputs can be omitted or sent as `null`. Numbers must be real numbers, though activity IDs may also be digit strings. Results are Garmin's JSON as-is. When nothing was recorded, the result is `{"noData": true, ...}`, which is not an error.
 
 ### Profile
 
@@ -327,7 +341,7 @@ Every tool is read-only (`readOnlyHint: true`). Dates are `YYYY-MM-DD` in the us
 | Tool | What it returns | Inputs |
 |---|---|---|
 | `garmin_get_menstrual_cycle_summary` | Cycle containing the date: phase, day in cycle, predicted ovulation, fertile window, pregnancy info. | `calendarDate` |
-| `garmin_get_menstrual_cycle_day` | Day log (flow, symptoms, mood), cycle summary, pregnancy weight goals / kick counts. | `calendarDate`, `todayDate` (defaults to today, UTC), `reducedResponse`, `skipbm`, `includeAnalysis` |
+| `garmin_get_menstrual_cycle_day` | Day log (flow, symptoms, mood), cycle summary, pregnancy weight goals / kick counts. | `calendarDate`, `todayDate` (defaults to today: local date when running locally, UTC when hosted), `reducedResponse`, `skipbm`, `includeAnalysis` |
 
 ## API limits and behavior
 
@@ -360,6 +374,9 @@ Official references: [Personal API overview](https://developer.garmin.com/gc-dev
 | `{"noData": true}` | Nothing recorded for that date, or your device doesn't support the metric (HRV, SpO2, Body Battery…). |
 | `This endpoint accepts at most N days` | Split the range. The model usually does this by itself after reading the error. |
 | `too large to return inline` | Use the local server with `GARMIN_DOWNLOAD_DIR`. |
+| `Garmin did not respond within 12 seconds` | Garmin is slow or down. Retry later, or ask for a smaller date range. Each request to Garmin has a 12s timeout, so a tool call always finishes within Vercel's 60s limit. |
+| `Could not reach Garmin` | Network or DNS problem between the server and `personal.connectapi.garmin.com`. |
+| `The token endpoint did not return a JWT` | Garmin answered the token request with something else, such as a maintenance page. Retry later. |
 | Server exits with `GARMIN_API_KEY is not set` | Add `GARMIN_API_KEY` to the `env` block of your client config. |
 
 ## Development
