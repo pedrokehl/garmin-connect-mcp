@@ -86,7 +86,7 @@ When Garmin adds or changes an endpoint:
    - `request(args, ctx)`: build the path with `seg()` for path params. Query values that are `undefined` or `null` are dropped automatically, and arrays are repeated. Use `ctx.today()` if a default date is unavoidable.
 2. If it is a new area file, add it to `allTools` in `src/tools/index.ts`.
 3. Update `test/tools.test.ts`: add the endpoint to `SPEC_ENDPOINTS` and a sample to `CASES`. The tests fail until both are present. Then update the tool count (26) in the tests and the README.
-4. Add the tool to the **Tool reference** in `README.md`.
+4. Add the tool name to the **Tools** table in `README.md` (a test checks every tool is listed). Keep the README short: details belong in the tool description, and hosting or troubleshooting notes go in `docs/deployment.md`.
 
 ### Description style guide
 
