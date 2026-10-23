@@ -21,7 +21,7 @@ export function loginPage(input: LoginPageInput, status = 200): Response {
     .join('\n        ');
   const redirectHost = safeHost(input.redirectUri);
   const body = `
-    <h1>Connect to Garmin Connect MCP</h1>
+    <h1><img src="/icon.svg" alt="" width="40" height="40"> Connect Garmin</h1>
     <p><strong>${escapeHtml(input.clientId)}</strong> is asking for read-only access to your Garmin data through this server.
        You'll be sent back to <strong>${escapeHtml(redirectHost)}</strong>.</p>
     ${input.error ? `<p class="error" role="alert">${escapeHtml(input.error)}</p>` : ''}
@@ -46,9 +46,13 @@ function htmlResponse(body: string, status: number): Response {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
-    <title>Garmin Connect MCP</title>
+    <title>Connect Garmin</title>
+    <link rel="icon" href="/favicon.ico" sizes="32x32 64x64">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <style>
       body { font: 16px/1.5 system-ui, sans-serif; max-width: 30rem; margin: 4rem auto; padding: 0 1rem; color: #222; }
+      h1 { display: flex; align-items: center; gap: 0.6rem; }
+      h1 img { border-radius: 9px; }
       label { display: block; margin: 1.5rem 0 0.4rem; font-weight: 600; }
       input[type=password] { width: 100%; padding: 0.6rem; font-size: 1rem; box-sizing: border-box; }
       button { margin-top: 1rem; padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; }
@@ -68,7 +72,7 @@ function htmlResponse(body: string, status: number): Response {
       // No form-action: browsers apply it to every redirect after the form is submitted, and OAuth
       // callbacks chain through further origins (e.g. Google's relay forwards to Gemini), which it
       // blocks. Injected forms aren't possible anyway: no scripts run and every value is escaped.
-      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
+      'content-security-policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
       'x-frame-options': 'DENY',
       'referrer-policy': 'no-referrer',
     },

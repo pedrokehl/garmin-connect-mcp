@@ -132,7 +132,7 @@ export async function handleOAuth(
           authorization_servers: [origin],
           scopes_supported: [SCOPE],
           bearer_methods_supported: ['header'],
-          resource_name: 'Garmin Connect MCP',
+          resource_name: 'Garmin',
         }),
       );
     }

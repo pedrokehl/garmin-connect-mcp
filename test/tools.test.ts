@@ -172,6 +172,18 @@ describe('tool registry', () => {
   });
 });
 
+describe('server identity', () => {
+  it('shows as "Garmin" with an embedded icon when there is no public origin (stdio)', async () => {
+    const { client } = await connect(() => json({}));
+    const info = client.getServerVersion();
+    expect(info).toMatchObject({ name: 'garmin', title: 'Garmin' });
+    const [icon] = info?.icons ?? [];
+    expect(icon?.mimeType).toBe('image/png');
+    const png = Buffer.from(icon!.src.replace(/^data:image\/png;base64,/, ''), 'base64');
+    expect(png.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  });
+});
+
 describe('tool calls', () => {
   for (const [name, { args, url }] of Object.entries(CASES)) {
     it(`${name} calls ${url.split('?')[0]}`, async () => {

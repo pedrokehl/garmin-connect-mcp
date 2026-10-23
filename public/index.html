@@ -4,16 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Garmin Connect MCP</title>
+    <title>Garmin MCP server</title>
+    <link rel="icon" href="/favicon.ico" sizes="32x32 64x64">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <style>
       body { font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; color: #222; }
       code { background: #f3f3f3; padding: 0.1rem 0.3rem; border-radius: 4px; }
     </style>
   </head>
   <body>
-    <h1>Garmin Connect MCP</h1>
+    <h1><img src="/icon.svg" alt="" width="48" height="48" style="vertical-align: middle; border-radius: 10px"> Garmin MCP server</h1>
     <p>This deployment serves an MCP server for the Garmin Connect Personal API.</p>
-    <p>MCP endpoint: <code>/mcp</code>. It requires <code>Authorization: Bearer &lt;MCP_AUTH_TOKEN&gt;</code>.</p>
+    <p>MCP endpoint: <code>/mcp</code>. Connect Claude, Gemini or ChatGPT with OAuth (client ID <code>garmin-mcp</code>), or send <code>Authorization: Bearer &lt;MCP_AUTH_TOKEN&gt;</code>.</p>
     <p>Setup and client configuration: <a href="https://github.com/pedrokehl/garmin-connect-mcp#readme">github.com/pedrokehl/garmin-connect-mcp</a></p>
   </body>
 </html>

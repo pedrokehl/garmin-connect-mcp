@@ -3,10 +3,14 @@ import type { GarminConfig } from './config.js';
 import { TokenManager } from './garmin/auth.js';
 import { GarminClient } from './garmin/client.js';
 import type { ToolContext } from './tools/define.js';
+import { serverIcons } from './icon.js';
 import { registerAllTools } from './tools/index.js';
 import { utcToday } from './tools/schemas.js';
 
+/** Internal name: log prefixes and the HTTP auth realm. */
 export const SERVER_NAME = 'garmin-connect-mcp';
+/** What MCP clients show for this server. */
+export const DISPLAY_NAME = 'Garmin';
 export const SERVER_VERSION = '0.1.0';
 
 const INSTRUCTIONS = `Read-only access to the user's own Garmin Connect data through the official Garmin Connect Personal API.
@@ -29,9 +33,22 @@ export function createToolContext(
   return { client, today: options.today ?? utcToday, saveFile: options.saveFile };
 }
 
-/** A fresh MCP server with every Garmin tool registered. Cheap: safe to call per request. */
-export function createGarminServer(ctx: ToolContext): McpServer {
-  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: INSTRUCTIONS });
+/**
+ * A fresh MCP server with every Garmin tool registered. Cheap: safe to call per request.
+ * `publicOrigin` (HTTP only) lets clients load the hosted icon from this deployment.
+ */
+export function createGarminServer(ctx: ToolContext, options: { publicOrigin?: string } = {}): McpServer {
+  const server = new McpServer(
+    {
+      name: 'garmin',
+      title: DISPLAY_NAME,
+      version: SERVER_VERSION,
+      description: 'Read-only access to your own Garmin Connect data: activities, sleep, HRV, Body Battery, stress, steps, heart rate, weight and more.',
+      websiteUrl: 'https://github.com/pedrokehl/garmin-connect-mcp',
+      icons: serverIcons(options.publicOrigin),
+    },
+    { instructions: INSTRUCTIONS },
+  );
   registerAllTools(server, ctx);
   return server;
 }

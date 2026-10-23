@@ -90,9 +90,12 @@ export function createHttpHandler(options: HttpHandlerOptions = {}): (request: R
     if (!mcp) {
       try {
         const ctx = createToolContext(loadGarminConfig(env), { fetch: options.fetch });
-        mcp = createMcpHandler(() => createGarminServer(ctx), {
-          onerror: (error) => console.error(`[${SERVER_NAME}] ${error.message}`),
-        });
+        mcp = createMcpHandler(
+          ({ requestInfo }) => createGarminServer(ctx, { publicOrigin: requestInfo ? new URL(requestInfo.url).origin : undefined }),
+          {
+            onerror: (error) => console.error(`[${SERVER_NAME}] ${error.message}`),
+          },
+        );
       } catch (error) {
         const message = error instanceof ConfigError ? error.message : 'Failed to start the MCP server.';
         return jsonError(500, `Server not configured: ${message}`);

@@ -130,7 +130,14 @@ describe('HTTP 2025-era clients (mcp-remote, Cursor)', () => {
       ),
     );
     expect(init.result?.protocolVersion).toBe('2025-06-18');
-    expect((init.result?.serverInfo as { name: string }).name).toBe('garmin-connect-mcp');
+    expect(init.result?.serverInfo).toMatchObject({
+      name: 'garmin',
+      title: 'Garmin',
+      icons: [
+        { src: 'https://example.vercel.app/icon.png', mimeType: 'image/png', sizes: ['256x256'] },
+        { src: 'https://example.vercel.app/icon.svg', mimeType: 'image/svg+xml', sizes: ['any'] },
+      ],
+    });
 
     const list = await rpc(await handle(legacy({ jsonrpc: '2.0', id: 2, method: 'tools/list' })));
     expect((list.result?.tools as unknown[]).length).toBe(26);

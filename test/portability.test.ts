@@ -77,6 +77,18 @@ describe('dates', () => {
   });
 });
 
+describe('static icon files served by Vercel (public/)', () => {
+  it('ships icon.png (256x256 PNG), icon.svg and favicon.ico', async () => {
+    const root = resolve(SRC, '..');
+    const png = await readFile(join(root, 'public/icon.png'));
+    expect(png.subarray(1, 4).toString()).toBe('PNG');
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([256, 256]);
+    expect(await readFile(join(root, 'public/icon.svg'), 'utf8')).toMatch(/^<svg /);
+    const ico = await readFile(join(root, 'public/favicon.ico'));
+    expect([ico.readUInt16LE(0), ico.readUInt16LE(2)]).toEqual([0, 1]);
+  });
+});
+
 describe('Vercel config', () => {
   it('points outputDirectory at a folder that exists (Vercel fails the build otherwise)', async () => {
     const root = resolve(SRC, '..');
