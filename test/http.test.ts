@@ -95,3 +95,58 @@ describe('HTTP MCP end to end', () => {
     expect(garmin.dataCalls()).toHaveLength(2);
   });
 });
+
+describe('HTTP 2025-era clients (mcp-remote, Cursor)', () => {
+  const legacy = (body: unknown) =>
+    new Request(URL_, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'mcp-protocol-version': '2025-06-18',
+        authorization: `Bearer ${TOKEN}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+  /** Responses may be plain JSON or a single SSE `data:` frame. */
+  async function rpc(response: Response): Promise<{ result?: Record<string, unknown>; error?: unknown }> {
+    const text = await response.text();
+    const data = text.startsWith('{') ? text : (/^data: (.*)$/m.exec(text)?.[1] ?? '');
+    return JSON.parse(data) as { result?: Record<string, unknown> };
+  }
+
+  it('serves initialize, tools/list and tools/call statelessly', async () => {
+    const { handle, garmin } = handler();
+
+    const init = await rpc(
+      await handle(
+        legacy({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'mcp-remote', version: '1' } },
+        }),
+      ),
+    );
+    expect(init.result?.protocolVersion).toBe('2025-06-18');
+    expect((init.result?.serverInfo as { name: string }).name).toBe('garmin-connect-mcp');
+
+    const list = await rpc(await handle(legacy({ jsonrpc: '2.0', id: 2, method: 'tools/list' })));
+    expect((list.result?.tools as unknown[]).length).toBe(26);
+
+    const call = await rpc(
+      await handle(legacy({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'garmin_get_user_settings', arguments: {} } })),
+    );
+    expect((call.result?.content as { text: string }[])[0]?.text).toBe('{"displayName":"runner"}');
+    expect(garmin.tokenCalls()).toHaveLength(1);
+  });
+
+  it('answers GET (2025 SSE stream) with 405 since serving is stateless', async () => {
+    const { handle } = handler();
+    const response = await handle(
+      new Request(URL_, { method: 'GET', headers: { accept: 'text/event-stream', authorization: `Bearer ${TOKEN}`, 'mcp-protocol-version': '2025-06-18' } }),
+    );
+    expect(response.status).toBe(405);
+  });
+});
