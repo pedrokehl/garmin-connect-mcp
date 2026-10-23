@@ -27,10 +27,10 @@ export const getMenstrualCycleDay = jsonTool({
     todayDate: date(
       "The current date from the user's point of view, used as the reference for predictions. " +
         "Defaults to today: the local date when running locally, the UTC date when hosted, so pass it explicitly if you know the user's date.",
-    ).nullish(),
-    reducedResponse: z.boolean().nullish().describe('Return a lighter payload. Default false.'),
-    skipbm: z.boolean().nullish().describe('Exclude baby movement (kick count) data. Default false.'),
-    includeAnalysis: z.boolean().nullish().describe('Include cycle analysis data. Default false.'),
+    ).optional(),
+    reducedResponse: z.boolean().optional().describe('Return a lighter payload. Default false.'),
+    skipbm: z.boolean().optional().describe('Exclude baby movement (kick count) data. Default false.'),
+    includeAnalysis: z.boolean().optional().describe('Include cycle analysis data. Default false.'),
   }),
   request: ({ calendarDate, todayDate, ...rest }, ctx) => ({
     path: `/periodichealth-service/menstrualcycle/dayview/${seg(calendarDate)}`,

@@ -30,7 +30,7 @@ export const getWeightSummary = jsonTool({
     endDate: endDate(),
     includeAll: z
       .boolean()
-      .nullish()
+      .optional()
       .describe('Include every weigh-in of each day instead of only the latest one. Default false.'),
   }),
   validate: ({ startDate, endDate }) => checkRange(startDate, endDate),

@@ -25,7 +25,7 @@ export const getHeartRateZones = jsonTool({
   inputSchema: z.object({
     generateDefaults: z
       .boolean()
-      .nullish()
+      .optional()
       .describe('Generate default zones when the user has none configured. Garmin default: true.'),
   }),
   request: ({ generateDefaults }) => ({ path: '/biometric-service/heartRateZones/v2', query: { generateDefaults } }),
@@ -68,7 +68,7 @@ export const getBodyBattery = jsonTool({
     chunks: integer()
       .min(1)
       .max(96)
-      .nullish()
+      .optional()
       .describe('Split each day into this many intervals and report the min/max Body Battery of each (e.g. 4 = every 6 hours).'),
   }),
   validate: ({ startDate, endDate }) => checkRange(startDate, endDate, 31),
@@ -100,7 +100,7 @@ export const getFitnessAge = jsonTool({
     calendarDate: date('Reference date; the latest Fitness Age available on or before it is returned.'),
     fullHistoryScan: z
       .boolean()
-      .nullish()
+      .optional()
       .describe('Search the whole history for the latest value (Garmin default: true). If false, only the 28 days before calendarDate are considered.'),
   }),
   request: ({ calendarDate, fullHistoryScan }) => ({

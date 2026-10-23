@@ -1,4 +1,4 @@
-import type { CallToolResult, McpServer } from '@modelcontextprotocol/server';
+import type { CallToolResult, McpServer, StandardSchemaWithJSON } from '@modelcontextprotocol/server';
 import { describeError } from '../garmin/errors.js';
 import { activityTools } from './activities.js';
 import { bodyTools } from './body.js';
@@ -32,7 +32,7 @@ export function registerAllTools(server: McpServer, ctx: ToolContext): void {
       {
         title: tool.title,
         description: tool.description,
-        inputSchema: tool.inputSchema,
+        inputSchema: nullAsMissing(tool.inputSchema),
         annotations: {
           title: tool.title,
           readOnlyHint: true,
@@ -44,6 +44,28 @@ export function registerAllTools(server: McpServer, ctx: ToolContext): void {
       (args: unknown) => runTool(tool, args, ctx),
     );
   }
+}
+
+/**
+ * Models often send `null` for "not set". Accept that by dropping top-level null
+ * fields before validation, while advertising plain optional fields: a
+ * `["string", "null"]` type in the JSON schema is less portable across clients
+ * (e.g. providers that only accept a single `type`).
+ */
+export function nullAsMissing<S extends StandardSchemaWithJSON>(schema: S): S {
+  const standard = schema['~standard'];
+  return {
+    '~standard': {
+      ...standard,
+      jsonSchema: standard.jsonSchema,
+      validate: (value: unknown) => standard.validate(dropNullFields(value)),
+    },
+  } as S;
+}
+
+function dropNullFields(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  return Object.fromEntries(Object.entries(value).filter(([, field]) => field !== null));
 }
 
 /** Validate, call Garmin, and shape the result. Never throws: failures become `isError` results. */

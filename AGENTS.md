@@ -50,7 +50,7 @@ The tool context is created **once per process** so the 24h Garmin token survive
 | Typecheck | `npm run typecheck` |
 | Unit/integration tests | `npm test` (vitest, Garmin fully mocked, no network) |
 | Run stdio from source | `GARMIN_API_KEY=… npm run dev` |
-| MCP Inspector | `npm run inspector` |
+| MCP Inspector | `npm run inspector`, or a headless schema check: `npx @modelcontextprotocol/inspector --cli --strict -e GARMIN_API_KEY=x node dist/src/stdio.js --method tools/list`, which must print no warnings |
 | Live smoke test | `npm run smoke` (needs a real key in `.env`; prints shapes only) |
 | HTTP locally | `npx vercel dev` → `http://localhost:3000/mcp` |
 
@@ -76,7 +76,7 @@ When Garmin adds or changes an endpoint:
 1. Add or edit the definition in the matching `src/tools/<area>.ts` with `jsonTool({...})`. Use `customTool` only for non-JSON responses, like the file download.
    - `name`: `garmin_<verb>_<thing>`, snake_case.
    - `endpoint`: exactly `GET /path/{param}` as written in the spec. Tests compare against this.
-   - `inputSchema`: a `z.object` whose fields all have `.describe()`. Reuse `date()`, `startDate()`, `endDate()`, `integer()` and `activityId` from `schemas.ts`. Keep Garmin's parameter names. Optional fields use `.nullish()` (models send `null` for "not set"). **Never use `z.coerce`**: it turns `null`/`""`/`false` into 0 and silently changes the request.
+   - `inputSchema`: a `z.object` whose fields all have `.describe()`. Reuse `date()`, `startDate()`, `endDate()`, `integer()` and `activityId` from `schemas.ts`. Keep Garmin's parameter names. Optional fields use `.optional()`, not `.nullish()`: `registerAllTools` already accepts `null` as "not set" (`nullAsMissing`), and `.nullish()` would advertise a `["string","null"]` type that some clients reject. **Never use `z.coerce`**: it turns `null`/`""`/`false` into 0 and silently changes the request.
    - `validate`: use `checkRange(start, end, maxDays)` when the spec documents a maximum span.
    - `request(args, ctx)`: build the path with `seg()` for path params. Query values that are `undefined` or `null` are dropped automatically, and arrays are repeated. Use `ctx.today()` if a default date is unavoidable.
 2. If it is a new area file, add it to `allTools` in `src/tools/index.ts`.

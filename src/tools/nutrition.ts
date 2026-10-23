@@ -13,10 +13,10 @@ export const getNutritionLog = jsonTool({
     'Only has data if the user logs food in Garmin Connect.',
   inputSchema: z.object({
     date: date('The day to fetch.'),
-    includeGoals: z.boolean().nullish().describe('Include nutrition goals. Default true.'),
-    includeNutrition: z.boolean().nullish().describe('Include nutrient totals. Default true.'),
-    includeMedia: z.boolean().nullish().describe('Include food images. Default true; set false to keep the response smaller.'),
-    mealId: integer().nullish().describe('Only return one meal (breakfast, lunch, dinner or snacks) by its numeric meal ID, as seen in mealDetails.'),
+    includeGoals: z.boolean().optional().describe('Include nutrition goals. Default true.'),
+    includeNutrition: z.boolean().optional().describe('Include nutrient totals. Default true.'),
+    includeMedia: z.boolean().optional().describe('Include food images. Default true; set false to keep the response smaller.'),
+    mealId: integer().optional().describe('Only return one meal (breakfast, lunch, dinner or snacks) by its numeric meal ID, as seen in mealDetails.'),
   }),
   request: ({ date, ...query }) => ({ path: `/nutrition-service/food/logs/${seg(date)}`, query }),
 });

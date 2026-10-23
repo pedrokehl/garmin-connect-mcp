@@ -20,62 +20,62 @@ export const searchActivities = jsonTool({
     'All filters are optional and combined with AND. Paginate with `start` and `limit`.',
   ].join(' '),
   inputSchema: z.object({
-    start: integer().min(0).nullish().describe('Zero-based offset of the first activity to return, for pagination. Default 0.'),
+    start: integer().min(0).optional().describe('Zero-based offset of the first activity to return, for pagination. Default 0.'),
     limit: integer()
       .min(1)
       .max(1000)
       .default(20)
       .describe('Maximum number of activities to return. Default 20 here (Garmin itself defaults to 99). Keep it small to save context.'),
-    startDate: date('Only activities that started on or after this local date.').nullish(),
-    endDate: date('Only activities that started on or before this local date.').nullish(),
-    search: z.string().nullish().describe('Free text matched against activity names and descriptions.'),
+    startDate: date('Only activities that started on or after this local date.').optional(),
+    endDate: date('Only activities that started on or before this local date.').optional(),
+    search: z.string().optional().describe('Free text matched against activity names and descriptions.'),
     activityType: z
       .string()
-      .nullish()
+      .optional()
       .describe('Parent activity type key, e.g. running, cycling, swimming, walking, hiking, fitness_equipment, diving. Must be a parent type, not a subtype.'),
     activitySubType: z
       .string()
-      .nullish()
+      .optional()
       .describe('Activity subtype key, e.g. trail_running or treadmill_running (with activityType=running), road_cycling or indoor_cycling (with activityType=cycling).'),
-    excludedActivitySubType: z.array(z.string()).nullish().describe('Subtype keys to exclude, e.g. ["treadmill_running"].'),
+    excludedActivitySubType: z.array(z.string()).optional().describe('Subtype keys to exclude, e.g. ["treadmill_running"].'),
     eventType: z
       .string()
-      .nullish()
+      .optional()
       .describe('Event classification key: race, training, recreation, fitness, specialEvent or uncategorized.'),
     favorite: z
       .union([z.literal(-1), z.literal(0), z.literal(1)])
-      .nullish()
+      .optional()
       .describe('1 = only favorites, 0 = only non-favorites, -1 = no filter (default).'),
     excludeChildren: z
       .boolean()
-      .nullish()
+      .optional()
       .describe('Exclude child activities of a multisport activity (e.g. the swim/bike/run legs of a triathlon). Garmin default: true.'),
     sortBy: z
       .string()
-      .nullish()
+      .optional()
       .describe('Field to sort by, e.g. startLocal (default), name, distance, duration, elevationGain, calories.'),
-    sortOrder: z.enum(['asc', 'desc']).nullish().describe('Sort direction. Default desc (newest/largest first).'),
-    minDistance: integer().min(0).nullish().describe('Minimum distance in meters (inclusive).'),
-    maxDistance: integer().min(0).nullish().describe('Maximum distance in meters (inclusive).'),
-    minDuration: integer().min(0).nullish().describe('Minimum timer (moving) duration in seconds (inclusive).'),
-    maxDuration: integer().min(0).nullish().describe('Maximum timer (moving) duration in seconds (inclusive).'),
-    minElapsedDuration: integer().min(0).nullish().describe('Minimum elapsed duration including pauses, in seconds.'),
-    maxElapsedDuration: integer().min(0).nullish().describe('Maximum elapsed duration including pauses, in seconds.'),
-    minElevation: integer().min(0).nullish().describe('Minimum total elevation gain in meters.'),
-    maxElevation: integer().min(0).nullish().describe('Maximum total elevation gain in meters.'),
-    minAvgPower: integer().min(0).nullish().describe('Minimum average power in watts.'),
-    upperLatitude: z.number().min(-90).max(90).nullish().describe('Bounding box (start location) north edge, decimal degrees. Provide all four bounds.'),
-    lowerLatitude: z.number().min(-90).max(90).nullish().describe('Bounding box south edge, decimal degrees. Provide all four bounds.'),
-    leftLongitude: z.number().min(-180).max(180).nullish().describe('Bounding box west edge, decimal degrees. Provide all four bounds.'),
-    rightLongitude: z.number().min(-180).max(180).nullish().describe('Bounding box east edge, decimal degrees. Provide all four bounds.'),
-    lowerMaxDepth: integer().min(0).nullish().describe('Dives only: minimum of the max depth, in centimeters.'),
-    upperMaxDepth: integer().min(0).nullish().describe('Dives only: maximum of the max depth, in centimeters.'),
-    minBottomTime: integer().min(0).nullish().describe('Dives only: minimum bottom time in seconds.'),
-    maxBottomTime: integer().min(0).nullish().describe('Dives only: maximum bottom time in seconds.'),
-    decoDive: z.boolean().nullish().describe('Dives only: true = decompression dives, false = non-decompression dives.'),
+    sortOrder: z.enum(['asc', 'desc']).optional().describe('Sort direction. Default desc (newest/largest first).'),
+    minDistance: integer().min(0).optional().describe('Minimum distance in meters (inclusive).'),
+    maxDistance: integer().min(0).optional().describe('Maximum distance in meters (inclusive).'),
+    minDuration: integer().min(0).optional().describe('Minimum timer (moving) duration in seconds (inclusive).'),
+    maxDuration: integer().min(0).optional().describe('Maximum timer (moving) duration in seconds (inclusive).'),
+    minElapsedDuration: integer().min(0).optional().describe('Minimum elapsed duration including pauses, in seconds.'),
+    maxElapsedDuration: integer().min(0).optional().describe('Maximum elapsed duration including pauses, in seconds.'),
+    minElevation: integer().min(0).optional().describe('Minimum total elevation gain in meters.'),
+    maxElevation: integer().min(0).optional().describe('Maximum total elevation gain in meters.'),
+    minAvgPower: integer().min(0).optional().describe('Minimum average power in watts.'),
+    upperLatitude: z.number().min(-90).max(90).optional().describe('Bounding box (start location) north edge, decimal degrees. Provide all four bounds.'),
+    lowerLatitude: z.number().min(-90).max(90).optional().describe('Bounding box south edge, decimal degrees. Provide all four bounds.'),
+    leftLongitude: z.number().min(-180).max(180).optional().describe('Bounding box west edge, decimal degrees. Provide all four bounds.'),
+    rightLongitude: z.number().min(-180).max(180).optional().describe('Bounding box east edge, decimal degrees. Provide all four bounds.'),
+    lowerMaxDepth: integer().min(0).optional().describe('Dives only: minimum of the max depth, in centimeters.'),
+    upperMaxDepth: integer().min(0).optional().describe('Dives only: maximum of the max depth, in centimeters.'),
+    minBottomTime: integer().min(0).optional().describe('Dives only: minimum bottom time in seconds.'),
+    maxBottomTime: integer().min(0).optional().describe('Dives only: maximum bottom time in seconds.'),
+    decoDive: z.boolean().optional().describe('Dives only: true = decompression dives, false = non-decompression dives.'),
     requiredField: z
       .array(z.string())
-      .nullish()
+      .optional()
       .describe('Only return activities where all of these fields are non-null, e.g. ["averageHR", "avgPower"].'),
   }),
   validate: (args) => {

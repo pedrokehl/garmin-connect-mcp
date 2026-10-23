@@ -156,6 +156,20 @@ describe('tool registry', () => {
       expect(tool.inputSchema.type).toBe('object');
     }
   });
+
+  it('advertises portable schemas: no array-valued or null types', async () => {
+    const { client } = await connect(() => json({}));
+    const { tools } = await client.listTools();
+    const offenders: string[] = [];
+    const visit = (node: unknown, path: string) => {
+      if (!node || typeof node !== 'object') return;
+      const record = node as Record<string, unknown>;
+      if (Array.isArray(record.type) || record.type === 'null') offenders.push(path);
+      for (const [key, child] of Object.entries(record)) visit(child, `${path}.${key}`);
+    };
+    for (const tool of tools) visit(tool.inputSchema, tool.name);
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe('tool calls', () => {
