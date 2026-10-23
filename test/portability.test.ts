@@ -89,6 +89,24 @@ describe('Vercel config', () => {
     expect(config.functions?.['api/mcp.ts']?.maxDuration).toBeGreaterThanOrEqual(60);
   });
 
+  it('routes every OAuth path to the MCP function', async () => {
+    const config = JSON.parse(await readFile(join(resolve(SRC, '..'), 'vercel.json'), 'utf8')) as {
+      rewrites: { source: string; destination: string }[];
+    };
+    const sources = config.rewrites.map((r) => r.source);
+    for (const source of [
+      '/mcp',
+      '/oauth/:action',
+      '/.well-known/oauth-protected-resource',
+      '/.well-known/oauth-protected-resource/:path*',
+      '/.well-known/oauth-authorization-server',
+      '/.well-known/openid-configuration',
+    ]) {
+      expect(sources).toContain(source);
+    }
+    for (const rewrite of config.rewrites) expect(rewrite.destination.startsWith('/api/mcp')).toBe(true);
+  });
+
   it('pins the framework preset to "Other" so Vercel serves api/ functions', async () => {
     const config = JSON.parse(await readFile(join(resolve(SRC, '..'), 'vercel.json'), 'utf8')) as { framework?: unknown };
     expect(config).toHaveProperty('framework', null);

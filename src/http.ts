@@ -3,11 +3,15 @@
  * other fetch-style runtime (Cloudflare Workers, Deno, Bun, Netlify).
  *
  * Personal health data is behind this endpoint, so it fails closed: without a
- * configured MCP_AUTH_TOKEN every request is refused.
+ * configured MCP_AUTH_TOKEN every request is refused. Clients authenticate with
+ * `Authorization: Bearer <MCP_AUTH_TOKEN>`, or, when MCP_OAUTH_CLIENT_ID and
+ * MCP_OAUTH_CLIENT_SECRET are set, with an access token from the built-in OAuth flow.
  */
 import { createMcpHandler, type McpHttpHandler } from '@modelcontextprotocol/server';
 import { ConfigError, loadGarminConfig, processEnv } from './config.js';
 import { SERVER_NAME, createGarminServer, createToolContext } from './mcp-server.js';
+import { handleOAuth, isValidAccessToken, loadOAuthConfig, oauthRoute, resourceMetadataUrl, type OAuthConfig } from './oauth/routes.js';
+import { secretsEqual } from './oauth/tokens.js';
 
 /** Shorter shared secrets are refused: the token is the only thing protecting your data. */
 export const MIN_AUTH_TOKEN_LENGTH = 24;
@@ -18,6 +22,10 @@ export interface HttpHandlerOptions {
   env?: Env;
   /** Injected in tests to fake Garmin. */
   fetch?: typeof fetch;
+  /** Injected in tests to control token expiry. */
+  now?: () => number;
+  /** Injected in tests to skip the delay after a wrong token on the OAuth login page. */
+  oauthFailureDelayMs?: number;
 }
 
 /**
@@ -26,7 +34,9 @@ export interface HttpHandlerOptions {
  */
 export function createHttpHandler(options: HttpHandlerOptions = {}): (request: Request) => Promise<Response> {
   const env = options.env ?? processEnv();
+  const now = options.now ?? Date.now;
   let mcp: McpHttpHandler | undefined;
+  let oauthLoading: Promise<OAuthConfig | undefined> | undefined;
 
   return async (request) => {
     const expected = env.MCP_AUTH_TOKEN?.trim();
@@ -36,9 +46,33 @@ export function createHttpHandler(options: HttpHandlerOptions = {}): (request: R
         `Server not configured: set MCP_AUTH_TOKEN to a random secret of at least ${MIN_AUTH_TOKEN_LENGTH} characters (e.g. \`openssl rand -base64 32\`).`,
       );
     }
-    if (!(await bearerMatches(request.headers.get('authorization'), expected))) {
-      return jsonError(401, 'Missing or invalid bearer token. Send "Authorization: Bearer <MCP_AUTH_TOKEN>".', {
-        'WWW-Authenticate': `Bearer realm="${SERVER_NAME}"`,
+
+    let oauth: OAuthConfig | undefined;
+    try {
+      oauthLoading ??= loadOAuthConfig(env, expected);
+      oauth = await oauthLoading;
+      if (oauth && options.oauthFailureDelayMs !== undefined) oauth.failureDelayMs = options.oauthFailureDelayMs;
+    } catch (error) {
+      oauthLoading = undefined;
+      return jsonError(500, `Server not configured: ${error instanceof ConfigError ? error.message : 'invalid OAuth settings.'}`);
+    }
+
+    const url = new URL(request.url);
+    const route = oauthRoute(url);
+    if (route) {
+      if (!oauth) {
+        return jsonError(404, 'OAuth is not enabled on this server. Set MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET to enable it.');
+      }
+      return handleOAuth(request, route, oauth, now());
+    }
+
+    if (!(await isAuthorized(request, expected, oauth, now()))) {
+      const challenge = oauth
+        ? `Bearer realm="${SERVER_NAME}", resource_metadata="${resourceMetadataUrl(url)}"`
+        : `Bearer realm="${SERVER_NAME}"`;
+      const hint = oauth ? ' or sign in through OAuth' : '';
+      return jsonError(401, `Missing or invalid bearer token. Send "Authorization: Bearer <MCP_AUTH_TOKEN>"${hint}.`, {
+        'WWW-Authenticate': challenge,
       });
     }
 
@@ -57,18 +91,12 @@ export function createHttpHandler(options: HttpHandlerOptions = {}): (request: R
   };
 }
 
-/** Constant-time comparison of the presented bearer token (hash both, compare digests). */
-async function bearerMatches(header: string | null, expected: string): Promise<boolean> {
-  const match = /^Bearer\s+(.+)$/i.exec(header ?? '');
-  if (!match?.[1]) return false;
-  const [a, b] = await Promise.all([sha256(match[1].trim()), sha256(expected)]);
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
-  return diff === 0;
-}
-
-async function sha256(value: string): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)));
+/** The static MCP_AUTH_TOKEN (compared in constant time), or a valid OAuth access token. */
+async function isAuthorized(request: Request, expected: string, oauth: OAuthConfig | undefined, nowMs: number): Promise<boolean> {
+  const presented = /^Bearer\s+(.+)$/i.exec(request.headers.get('authorization') ?? '')?.[1]?.trim();
+  if (!presented) return false;
+  if (await secretsEqual(presented, expected)) return true;
+  return oauth !== undefined && (await isValidAccessToken(presented, oauth, nowMs));
 }
 
 function jsonError(status: number, message: string, headers: Record<string, string> = {}): Response {
