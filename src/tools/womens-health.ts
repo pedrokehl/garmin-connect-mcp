@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { seg } from '../garmin/client.js';
 import { jsonTool } from './define.js';
-import { date, today } from './schemas.js';
+import { date } from './schemas.js';
 
 export const getMenstrualCycleSummary = jsonTool({
   name: 'garmin_get_menstrual_cycle_summary',
@@ -24,14 +24,17 @@ export const getMenstrualCycleDay = jsonTool({
     'and, during pregnancy tracking, weekly weight goal ranges and optionally baby movement (kick count) data.',
   inputSchema: z.object({
     calendarDate: date('The day to fetch.'),
-    todayDate: date("The current date from the user's point of view, used as the reference for predictions. Defaults to today (server clock, UTC).").nullish(),
+    todayDate: date(
+      "The current date from the user's point of view, used as the reference for predictions. " +
+        "Defaults to today: the local date when running locally, the UTC date when hosted, so pass it explicitly if you know the user's date.",
+    ).nullish(),
     reducedResponse: z.boolean().nullish().describe('Return a lighter payload. Default false.'),
     skipbm: z.boolean().nullish().describe('Exclude baby movement (kick count) data. Default false.'),
     includeAnalysis: z.boolean().nullish().describe('Include cycle analysis data. Default false.'),
   }),
-  request: ({ calendarDate, todayDate, ...rest }) => ({
+  request: ({ calendarDate, todayDate, ...rest }, ctx) => ({
     path: `/periodichealth-service/menstrualcycle/dayview/${seg(calendarDate)}`,
-    query: { todayDate: todayDate ?? today(), ...rest },
+    query: { todayDate: todayDate ?? ctx.today(), ...rest },
   }),
 });
 

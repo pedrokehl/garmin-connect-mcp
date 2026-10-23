@@ -52,7 +52,7 @@ export async function runTool(tool: GarminTool, args: unknown, ctx: ToolContext)
   if (problem) return errorResult(problem);
   try {
     if (tool.kind === 'custom') return await tool.run(args as never, ctx);
-    const { path, query } = tool.request(args as never);
+    const { path, query } = tool.request(args as never, ctx);
     const result = await ctx.client.getJson(path, query);
     const payload = result.noData ? { noData: true, message: NO_DATA_MESSAGE } : result.data;
     return { content: [{ type: 'text', text: JSON.stringify(payload) }] };

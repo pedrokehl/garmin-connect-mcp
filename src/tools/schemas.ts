@@ -47,7 +47,14 @@ export function checkRange(start: string, end: string, maxDays?: number): string
   return undefined;
 }
 
-/** Today's date (server clock, UTC) as YYYY-MM-DD. */
-export function today(): string {
+/** Today's date in UTC as YYYY-MM-DD (hosted servers, where the user's time zone is unknown). */
+export function utcToday(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Today's date in the machine's local time zone as YYYY-MM-DD (stdio, which runs on the user's machine). */
+export function localToday(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }

@@ -63,7 +63,7 @@ export function describeError(error: unknown): string {
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
       return `Garmin did not respond within ${GARMIN_TIMEOUT_MS / 1000} seconds. Try again in a moment, or request a smaller date range.`;
     }
-    if (error instanceof TypeError && /fetch failed|network/i.test(error.message)) {
+    if (error instanceof TypeError && /fetch failed|network|error sending request/i.test(error.message)) {
       const cause = error.cause instanceof Error ? ` (${error.cause.message})` : '';
       return `Could not reach Garmin${cause}. Check the network connection and try again.`;
     }

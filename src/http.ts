@@ -6,7 +6,7 @@
  * configured MCP_AUTH_TOKEN every request is refused.
  */
 import { createMcpHandler, type McpHttpHandler } from '@modelcontextprotocol/server';
-import { ConfigError, loadGarminConfig } from './config.js';
+import { ConfigError, loadGarminConfig, processEnv } from './config.js';
 import { SERVER_NAME, createGarminServer, createToolContext } from './server.js';
 
 /** Shorter shared secrets are refused: the token is the only thing protecting your data. */
@@ -25,7 +25,7 @@ export interface HttpHandlerOptions {
  * Garmin access token stays cached across requests on warm instances.
  */
 export function createHttpHandler(options: HttpHandlerOptions = {}): (request: Request) => Promise<Response> {
-  const env = options.env ?? process.env;
+  const env = options.env ?? processEnv();
   let mcp: McpHttpHandler | undefined;
 
   return async (request) => {

@@ -1,6 +1,5 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { z } from 'zod';
+import { toBase64 } from '../encoding.js';
 import { FileTooLargeError, seg } from '../garmin/client.js';
 import { customTool, jsonTool } from './define.js';
 import { activityId, checkRange, date, integer } from './schemas.js';
@@ -133,7 +132,7 @@ export const downloadActivityFile = customTool({
     let file;
     try {
       // Saving to disk has no size limit; inline results must fit in one HTTP response.
-      file = await ctx.client.getBinary(path, { maxBytes: ctx.downloadDir ? undefined : MAX_INLINE_DOWNLOAD_BYTES });
+      file = await ctx.client.getBinary(path, { maxBytes: ctx.saveFile ? undefined : MAX_INLINE_DOWNLOAD_BYTES });
     } catch (error) {
       if (!(error instanceof FileTooLargeError)) throw error;
       const size = error.declaredBytes ? `${formatKb(error.declaredBytes)}, ` : '';
@@ -153,10 +152,8 @@ export const downloadActivityFile = customTool({
     const filename = safeFilename(file.filename, `activity-${id}.${ext}`);
     const size = formatKb(file.bytes.byteLength);
 
-    if (ctx.downloadDir) {
-      await mkdir(ctx.downloadDir, { recursive: true });
-      const target = join(ctx.downloadDir, filename);
-      await writeFile(target, file.bytes);
+    if (ctx.saveFile) {
+      const target = await ctx.saveFile(filename, file.bytes);
       return { content: [{ type: 'text', text: `Saved activity ${id} (${file.contentType}, ${size}) to ${target}` }] };
     }
 
@@ -168,7 +165,7 @@ export const downloadActivityFile = customTool({
           resource: {
             uri: `garmin://activities/${id}/file/${encodeURIComponent(filename)}`,
             mimeType: file.contentType,
-            blob: Buffer.from(file.bytes).toString('base64'),
+            blob: toBase64(file.bytes),
           },
         },
       ],

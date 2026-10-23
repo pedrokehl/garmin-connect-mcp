@@ -1,3 +1,4 @@
+import { base64UrlToString } from '../encoding.js';
 import { GARMIN_TIMEOUT_MS, GarminApiError } from './errors.js';
 
 export const TOKEN_PATH = '/personalapitoken-service/personal-api/personal-api-key/token';
@@ -124,7 +125,7 @@ export function jwtExpiration(token: string): number | undefined {
   const payload = token.split('.')[1];
   if (!payload) return undefined;
   try {
-    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { exp?: unknown };
+    const claims = JSON.parse(base64UrlToString(payload)) as { exp?: unknown };
     return typeof claims.exp === 'number' ? claims.exp * 1000 : undefined;
   } catch {
     return undefined;

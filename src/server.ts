@@ -4,6 +4,7 @@ import { TokenManager } from './garmin/auth.js';
 import { GarminClient } from './garmin/client.js';
 import type { ToolContext } from './tools/define.js';
 import { registerAllTools } from './tools/index.js';
+import { utcToday } from './tools/schemas.js';
 
 export const SERVER_NAME = 'garmin-connect-mcp';
 export const SERVER_VERSION = '0.1.0';
@@ -19,10 +20,13 @@ const INSTRUCTIONS = `Read-only access to the user's own Garmin Connect data thr
  * Build the long-lived pieces (token cache + HTTP client) once per process,
  * so the 24h Garmin token is reused across MCP requests.
  */
-export function createToolContext(config: GarminConfig, options: { fetch?: typeof fetch; allowDownloadDir?: boolean } = {}): ToolContext {
+export function createToolContext(
+  config: GarminConfig,
+  options: { fetch?: typeof fetch } & Partial<Pick<ToolContext, 'today' | 'saveFile'>> = {},
+): ToolContext {
   const tokens = new TokenManager({ apiKey: config.apiKey, baseUrl: config.baseUrl, fetch: options.fetch });
   const client = new GarminClient({ baseUrl: config.baseUrl, tokens, fetch: options.fetch });
-  return { client, downloadDir: options.allowDownloadDir ? config.downloadDir : undefined };
+  return { client, today: options.today ?? utcToday, saveFile: options.saveFile };
 }
 
 /** A fresh MCP server with every Garmin tool registered. Cheap: safe to call per request. */

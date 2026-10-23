@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createGarminServer, createToolContext } from '../src/server.js';
+import { createFileSaver } from '../src/local-files.js';
 import { safeFilename } from '../src/tools/activities.js';
 import { allTools, runTool } from '../src/tools/index.js';
 import { BASE_URL, json, makeJwt, mockGarmin, type RecordedCall } from './helpers.js';
@@ -105,11 +106,15 @@ afterEach(async () => {
   close = undefined;
 });
 
-async function connect(onData: (call: RecordedCall) => Response, options: { downloadDir?: string } = {}) {
+async function connect(onData: (call: RecordedCall) => Response, options: { downloadDir?: string; today?: () => string } = {}) {
   const garmin = mockGarmin(onData);
   const ctx = createToolContext(
-    { apiKey: 'test-key', baseUrl: BASE_URL, downloadDir: options.downloadDir },
-    { fetch: garmin.fetch, allowDownloadDir: Boolean(options.downloadDir) },
+    { apiKey: 'test-key', baseUrl: BASE_URL },
+    {
+      fetch: garmin.fetch,
+      today: options.today,
+      saveFile: options.downloadDir ? createFileSaver(options.downloadDir) : undefined,
+    },
   );
   const server = createGarminServer(ctx);
   const client = new Client({ name: 'test', version: '1.0.0' });
@@ -186,6 +191,12 @@ describe('tool calls', () => {
     const { client, garmin } = await connect(() => json({}));
     await client.callTool({ name: 'garmin_get_menstrual_cycle_day', arguments: { calendarDate: '2026-10-20' } });
     expect(garmin.dataCalls()[0]?.url).toMatch(/\?todayDate=\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("takes the default todayDate from the context's clock (local for stdio, UTC when hosted)", async () => {
+    const { client, garmin } = await connect(() => json({}), { today: () => '2026-10-24' });
+    await client.callTool({ name: 'garmin_get_menstrual_cycle_day', arguments: { calendarDate: '2026-10-20' } });
+    expect(garmin.dataCalls()[0]?.url).toMatch(/\?todayDate=2026-10-24$/);
   });
 
   it('surfaces Garmin errors as isError results', async () => {
@@ -355,6 +366,14 @@ describe('network failures become readable tool errors', () => {
     const result = await client.callTool({ name: 'garmin_get_user_settings', arguments: {} });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toMatch(/Could not reach Garmin \(getaddrinfo ENOTFOUND/);
+  });
+
+  it("recognises Deno's wording for network failures", async () => {
+    const { client } = await connect(() => {
+      throw new TypeError('error sending request for url (https://personal.connectapi.garmin.com/x)');
+    });
+    const result = await client.callTool({ name: 'garmin_get_user_settings', arguments: {} });
+    expect(textOf(result)).toMatch(/^Could not reach Garmin/);
   });
 
   it('reports a key refused while retrying after a 401', async () => {

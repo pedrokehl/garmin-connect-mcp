@@ -5,11 +5,18 @@
  */
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { ConfigError, loadGarminConfig } from './config.js';
+import { createFileSaver } from './local-files.js';
 import { createGarminServer, createToolContext } from './server.js';
+import { localToday } from './tools/schemas.js';
 
 try {
   const config = loadGarminConfig();
-  const ctx = createToolContext(config, { allowDownloadDir: true });
+  const downloadDir = process.env.GARMIN_DOWNLOAD_DIR?.trim();
+  const ctx = createToolContext(config, {
+    // Runs on the user's machine, so the local date is the user's date.
+    today: localToday,
+    saveFile: downloadDir ? createFileSaver(downloadDir) : undefined,
+  });
   serveStdio(() => createGarminServer(ctx), {
     // stdout carries the protocol, so diagnostics go to stderr.
     onerror: (error) => console.error(`[garmin-connect-mcp] ${error.message}`),
