@@ -4,8 +4,8 @@
  *
  * Personal health data is behind this endpoint, so it fails closed: without a
  * configured MCP_AUTH_TOKEN every request is refused. Clients authenticate with
- * `Authorization: Bearer <MCP_AUTH_TOKEN>`, or, when MCP_OAUTH_CLIENT_ID and
- * MCP_OAUTH_CLIENT_SECRET are set, with an access token from the built-in OAuth flow.
+ * `Authorization: Bearer <MCP_AUTH_TOKEN>`, or, when MCP_OAUTH_CLIENT_SECRET is set,
+ * with an access token from the built-in OAuth flow.
  */
 import { createMcpHandler, type McpHttpHandler } from '@modelcontextprotocol/server';
 import { ConfigError, loadGarminConfig, processEnv } from './config.js';
@@ -61,7 +61,7 @@ export function createHttpHandler(options: HttpHandlerOptions = {}): (request: R
     const route = oauthRoute(url);
     if (route) {
       if (!oauth) {
-        return jsonError(404, 'OAuth is not enabled on this server. Set MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET to enable it.');
+        return jsonError(404, 'OAuth is not enabled on this server. Set MCP_OAUTH_CLIENT_SECRET to enable it.');
       }
       return handleOAuth(request, route, oauth, now());
     }

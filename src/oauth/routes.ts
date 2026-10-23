@@ -15,6 +15,8 @@ import { errorPage, loginPage } from './page.js';
 import { deriveSigningKey, pkceChallenge, randomId, secretsEqual, signToken, verifyToken, type TokenClaims } from './tokens.js';
 
 export const SCOPE = 'garmin:read';
+/** Client ID used unless MCP_OAUTH_CLIENT_ID overrides it. Not a secret: the client secret protects the flow. */
+export const DEFAULT_CLIENT_ID = 'garmin-mcp';
 const CODE_TTL_S = 5 * 60;
 const ACCESS_TTL_S = 60 * 60;
 const REFRESH_TTL_S = 30 * 24 * 60 * 60;
@@ -39,14 +41,20 @@ export interface OAuthConfig {
 
 type Env = Record<string, string | undefined>;
 
-/** OAuth is on only when both client credentials are set; one without the other is a misconfiguration. */
+/**
+ * OAuth is on when MCP_OAUTH_CLIENT_SECRET is set. The client ID defaults to DEFAULT_CLIENT_ID;
+ * setting MCP_OAUTH_CLIENT_ID without a secret is a misconfiguration.
+ */
 export async function loadOAuthConfig(env: Env, authToken: string): Promise<OAuthConfig | undefined> {
-  const clientId = env.MCP_OAUTH_CLIENT_ID?.trim();
+  const configuredId = env.MCP_OAUTH_CLIENT_ID?.trim();
   const clientSecret = env.MCP_OAUTH_CLIENT_SECRET?.trim();
-  if (!clientId && !clientSecret) return undefined;
-  if (!clientId || !clientSecret) {
-    throw new ConfigError('Set both MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET to enable OAuth, or neither to disable it.');
+  if (!clientSecret) {
+    if (configuredId) {
+      throw new ConfigError('MCP_OAUTH_CLIENT_ID is set but MCP_OAUTH_CLIENT_SECRET is missing. Set the secret to enable OAuth, or remove the client ID.');
+    }
+    return undefined;
   }
+  const clientId = configuredId || DEFAULT_CLIENT_ID;
   if (clientSecret.length < MIN_CLIENT_SECRET_LENGTH) {
     throw new ConfigError(`MCP_OAUTH_CLIENT_SECRET must be at least ${MIN_CLIENT_SECRET_LENGTH} characters (e.g. \`openssl rand -base64 32\`).`);
   }
@@ -155,7 +163,7 @@ async function authorize(request: Request, url: URL, config: OAuthConfig, nowMs:
   const clientId = params.client_id ?? '';
   const redirectUri = params.redirect_uri ?? '';
   if (!(await secretsEqual(clientId, config.clientId))) {
-    return errorPage('Unknown client', 'The client_id does not match MCP_OAUTH_CLIENT_ID configured on this server.');
+    return errorPage('Unknown client', `The client ID doesn't match this server's (MCP_OAUTH_CLIENT_ID, default "${DEFAULT_CLIENT_ID}").`);
   }
   if (!isAllowedRedirect(redirectUri, config)) {
     return errorPage(

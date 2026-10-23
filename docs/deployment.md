@@ -16,8 +16,8 @@ All configuration is done with environment variables. For local development, cop
 |---|---|---|---|
 | `GARMIN_API_KEY` | **Yes** | stdio + HTTP | Your Garmin Connect Personal API key. |
 | `MCP_AUTH_TOKEN` | **Yes, for HTTP** | HTTP | Shared secret that clients must send as `Authorization: Bearer <token>`. At least 24 characters; generate one with `openssl rand -base64 32`. Without it the HTTP server refuses every request. |
-| `MCP_OAUTH_CLIENT_ID` | For OAuth clients | HTTP | Enables the built-in OAuth sign-in (the Gemini app, claude.ai) together with the secret below. Any name, e.g. `garmin-mcp`. Set both or neither. |
-| `MCP_OAUTH_CLIENT_SECRET` | For OAuth clients | HTTP | OAuth client secret, at least 24 characters. Enter the same ID and secret in the client. |
+| `MCP_OAUTH_CLIENT_SECRET` | For OAuth clients | HTTP | Enables the built-in OAuth sign-in (the Gemini app, claude.ai). At least 24 characters. Enter it in the app together with the client ID `garmin-mcp`. |
+| `MCP_OAUTH_CLIENT_ID` | No | HTTP | Overrides the OAuth client ID (default `garmin-mcp`). Only takes effect with a client secret set. |
 | `MCP_OAUTH_REDIRECT_URIS` | No | HTTP | Extra allowed OAuth callback URLs, comma-separated. claude.ai's, Gemini Enterprise's and loopback (`http://localhost:*`) callbacks are allowed by default. |
 | `GARMIN_API_BASE_URL` | No | both | Override the API host. Default: `https://personal.connectapi.garmin.com`. |
 | `GARMIN_DOWNLOAD_DIR` | No | stdio only | If set, `garmin_download_activity_file` saves files to this folder (supports `~`) and returns the path instead of returning the file inline. |
@@ -198,7 +198,7 @@ Run it locally with `deno run --allow-env --allow-net --allow-read main.ts`, or 
 | `Could not reach Garmin` | Network or DNS problem between the server and `personal.connectapi.garmin.com`. |
 | `The token endpoint did not return a JWT` | Garmin answered the token request with something else, such as a maintenance page. Retry later. |
 | OAuth page: `Redirect URL not allowed` | Add the URL shown on the page to `MCP_OAUTH_REDIRECT_URIS` and redeploy. |
-| OAuth page: `Unknown client` | The client ID entered in the app doesn't match `MCP_OAUTH_CLIENT_ID`. |
+| OAuth page: `Unknown client` | The client ID entered in the app isn't `garmin-mcp`, or isn't the value of `MCP_OAUTH_CLIENT_ID` if you set one. |
 | Token request fails with `invalid_client` | The client secret entered in the app doesn't match `MCP_OAUTH_CLIENT_SECRET`. |
 | An OAuth app suddenly asks to sign in again | `MCP_AUTH_TOKEN` or the client secret changed, which revokes all OAuth tokens, or the 30-day refresh token expired. |
 | Server exits with `GARMIN_API_KEY is not set` | Add `GARMIN_API_KEY` to the `env` block of your client config. |

@@ -11,7 +11,8 @@ import { BASE_URL, json, mockGarmin } from './helpers.js';
 
 const ORIGIN = 'https://garmin-mcp.example.app';
 const AUTH_TOKEN = 'static-auth-token-abcdefghijklmnop';
-const CLIENT_ID = 'garmin-mcp-client';
+/** The default client ID: setup() sets only the secret, as most users will. */
+const CLIENT_ID = 'garmin-mcp';
 const CLIENT_SECRET = 'client-secret-0123456789abcdefghij';
 const CLAUDE_CALLBACK = 'https://claude.ai/api/mcp/auth_callback';
 const VERIFIER = 'a-pkce-code-verifier-that-is-long-enough-0123456789';
@@ -23,7 +24,6 @@ function setup(env: Record<string, string | undefined> = {}, nowRef = { now: Dat
       GARMIN_API_KEY: 'key',
       GARMIN_API_BASE_URL: BASE_URL,
       MCP_AUTH_TOKEN: AUTH_TOKEN,
-      MCP_OAUTH_CLIENT_ID: CLIENT_ID,
       MCP_OAUTH_CLIENT_SECRET: CLIENT_SECRET,
       ...env,
     },
@@ -100,19 +100,34 @@ const listTools = (bearer?: string) =>
   });
 
 describe('OAuth configuration', () => {
-  it('is off without client credentials: discovery 404s and bearer tokens still work', async () => {
-    const { handle } = setup({ MCP_OAUTH_CLIENT_ID: undefined, MCP_OAUTH_CLIENT_SECRET: undefined });
+  it('is off without a client secret: discovery 404s and bearer tokens still work', async () => {
+    const { handle } = setup({ MCP_OAUTH_CLIENT_SECRET: undefined });
     expect((await handle(new Request(`${ORIGIN}/.well-known/oauth-authorization-server`))).status).toBe(404);
     const unauthorized = await handle(listTools());
     expect(unauthorized.headers.get('www-authenticate')).toBe('Bearer realm="garmin-connect-mcp"');
     expect((await handle(listTools(AUTH_TOKEN))).status).toBe(200);
   });
 
-  it('fails closed when only one of the two client settings is set', async () => {
-    const { handle } = setup({ MCP_OAUTH_CLIENT_SECRET: undefined });
+  it('is on with only the secret set, using the default client ID "garmin-mcp"', async () => {
+    const { handle } = setup();
+    const page = await handle(new Request(`${ORIGIN}/oauth/authorize?${authorizeParams({ client_id: 'garmin-mcp' })}`));
+    expect(page.status).toBe(200);
+  });
+
+  it('lets MCP_OAUTH_CLIENT_ID override the default', async () => {
+    const { handle } = setup({ MCP_OAUTH_CLIENT_ID: 'my-own-id' });
+    const custom = await handle(new Request(`${ORIGIN}/oauth/authorize?${authorizeParams({ client_id: 'my-own-id' })}`));
+    expect(custom.status).toBe(200);
+    const fallback = await handle(new Request(`${ORIGIN}/oauth/authorize?${authorizeParams({ client_id: 'garmin-mcp' })}`));
+    expect(fallback.status).toBe(400);
+    expect(await fallback.text()).toMatch(/client ID doesn&#39;t match/);
+  });
+
+  it('fails closed when a client ID is set without a secret', async () => {
+    const { handle } = setup({ MCP_OAUTH_CLIENT_ID: 'my-own-id', MCP_OAUTH_CLIENT_SECRET: undefined });
     const response = await handle(listTools(AUTH_TOKEN));
     expect(response.status).toBe(500);
-    expect(await response.text()).toMatch(/Set both MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET/);
+    expect(await response.text()).toMatch(/MCP_OAUTH_CLIENT_ID is set but MCP_OAUTH_CLIENT_SECRET is missing/);
   });
 
   it('refuses a short client secret', async () => {

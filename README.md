@@ -57,14 +57,8 @@ Claude Desktop or Cursor, via [`mcp-remote`](https://www.npmjs.com/package/mcp-r
 
 These apps can't send a bearer header, so they sign in through OAuth instead. Bearer-token clients keep working alongside them.
 
-1. In Vercel, add two more environment variables, then redeploy:
-
-   | Variable | Value |
-   |---|---|
-   | `MCP_OAUTH_CLIENT_ID` | Any name, e.g. `garmin-mcp` |
-   | `MCP_OAUTH_CLIENT_SECRET` | Another secret from `openssl rand -base64 32` |
-
-2. Add the connector with your server URL, `https://<your-project>.vercel.app/mcp`, and the same client ID and secret:
+1. In Vercel, add `MCP_OAUTH_CLIENT_SECRET` with another secret from `openssl rand -base64 32`, then redeploy.
+2. Add the connector with your server URL, `https://<your-project>.vercel.app/mcp`, client ID `garmin-mcp`, and that client secret:
    - **claude.ai:** Settings → Connectors → Add custom connector. The client ID and secret go under Advanced settings.
    - **Gemini:** fill in Client ID and Client secret. If it also asks for URLs, use `https://<your-project>.vercel.app/oauth/authorize` (authorization) and `https://<your-project>.vercel.app/oauth/token` (token), with scope `garmin:read`.
 3. A sign-in page from your own server opens. Paste your `MCP_AUTH_TOKEN` and select **Allow access**.
