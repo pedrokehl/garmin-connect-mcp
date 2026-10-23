@@ -58,12 +58,12 @@ export class GarminClient {
 
   private async send(path: string, query: Query | undefined, accept: string): Promise<Response> {
     const url = this.baseUrl + path + buildQueryString(query);
-    let response = await this.attempt(url, accept, false);
+    let { response, token } = await this.attempt(url, accept);
     if (response.status === 401) {
       // Token may have been revoked or expired early: get a new one and retry once.
       await response.body?.cancel();
-      this.tokens.invalidate();
-      response = await this.attempt(url, accept, true);
+      this.tokens.invalidate(token);
+      ({ response } = await this.attempt(url, accept));
     }
     if (!response.ok) {
       throw new GarminApiError(response.status, 'GET', path, await response.text());
@@ -71,13 +71,14 @@ export class GarminClient {
     return response;
   }
 
-  private async attempt(url: string, accept: string, forceRefresh: boolean): Promise<Response> {
-    const token = await this.tokens.getToken(forceRefresh);
-    return this.fetchFn(url, {
+  private async attempt(url: string, accept: string): Promise<{ response: Response; token: string }> {
+    const token = await this.tokens.getToken();
+    const response = await this.fetchFn(url, {
       method: 'GET',
       headers: { Accept: accept, Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    return { response, token };
   }
 }
 

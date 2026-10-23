@@ -40,6 +40,25 @@ describe('GarminClient.getJson', () => {
     expect(first?.headers.authorization).not.toBe(second?.headers.authorization);
   });
 
+  it('a late 401 on an old token does not throw away the token another request already refreshed', async () => {
+    let revoked: string | undefined;
+    let releaseSlow!: () => void;
+    const slowGate = new Promise<void>((resolve) => (releaseSlow = resolve));
+    const { garmin, client } = setup(async (call) => {
+      revoked ??= call.headers.authorization;
+      if (call.headers.authorization !== revoked) return json({ ok: true });
+      if (call.url.endsWith('/slow')) await slowGate;
+      return new Response('revoked', { status: 401 });
+    });
+
+    const slow = client.getJson('/slow'); // holds the old token, answered late
+    await client.getJson('/fast'); // 401 → refresh → retry succeeds
+    releaseSlow();
+    await slow; // 401 on the old token → must reuse the refreshed one
+
+    expect(garmin.tokenCalls()).toHaveLength(2);
+  });
+
   it('gives up after the retry and explains the 401', async () => {
     const { garmin, client } = setup(() => new Response('nope', { status: 401 }));
 

@@ -2,16 +2,21 @@ import { GarminApiError } from './errors.js';
 
 export const TOKEN_PATH = '/personalapitoken-service/personal-api/personal-api-key/token';
 
-/** Reuse a cached token only while it has more than this much life left (matches Garmin's reference client). */
+/** Refresh a 24h token once it has less than this left (matches Garmin's reference client). */
 const REFRESH_WINDOW_MS = 60 * 60 * 1000;
-/** Used only if Garmin ever returns a token without a readable `exp` claim. */
+/** Used only if Garmin ever returns a JWT without a readable `exp` claim. */
 const FALLBACK_LIFETIME_MS = 23 * 60 * 60 * 1000;
+/** If `exp` is already past by our clock (clock skew), keep using the token this long; a 401 still forces a new one. */
+const SKEWED_TOKEN_REUSE_MS = 5 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 30_000;
+const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
 
 export interface AccessToken {
   value: string;
   /** Epoch milliseconds. */
   expiresAt: number;
+  /** Epoch milliseconds after which a new token is requested. */
+  refreshAt: number;
 }
 
 export interface TokenManagerOptions {
@@ -43,10 +48,8 @@ export class TokenManager {
     this.now = options.now ?? Date.now;
   }
 
-  async getToken(forceRefresh = false): Promise<string> {
-    if (!forceRefresh && this.cached && this.cached.expiresAt - this.now() > REFRESH_WINDOW_MS) {
-      return this.cached.value;
-    }
+  async getToken(): Promise<string> {
+    if (this.cached && this.now() < this.cached.refreshAt) return this.cached.value;
     this.inFlight ??= this.exchange().finally(() => {
       this.inFlight = undefined;
     });
@@ -54,9 +57,13 @@ export class TokenManager {
     return token.value;
   }
 
-  /** Drop the cached token, e.g. after Garmin answered 401. */
-  invalidate(): void {
-    this.cached = undefined;
+  /**
+   * Drop the cached token after Garmin rejected it with 401. Only clears the cache
+   * if it still holds the rejected token, so a token another request already
+   * refreshed is kept.
+   */
+  invalidate(rejectedToken: string): void {
+    if (this.cached?.value === rejectedToken) this.cached = undefined;
   }
 
   private async exchange(): Promise<AccessToken> {
@@ -70,14 +77,34 @@ export class TokenManager {
       throw new GarminApiError(response.status, 'POST', TOKEN_PATH, text);
     }
     const value = extractToken(text);
-    if (!value) {
-      throw new GarminApiError(response.status, 'POST', TOKEN_PATH, 'Token endpoint returned an empty body.');
+    if (!JWT_SHAPE.test(value)) {
+      // E.g. an HTML maintenance page served with 200. Never cache it, and don't echo it back.
+      const contentType = response.headers.get('content-type') ?? 'unknown content type';
+      throw new GarminApiError(
+        response.status,
+        'POST',
+        TOKEN_PATH,
+        `The token endpoint did not return a JWT (${contentType}, ${text.length} bytes). Garmin may be down; try again later.`,
+      );
     }
-    const exp = jwtExpiration(value);
-    const token = { value, expiresAt: exp ?? this.now() + FALLBACK_LIFETIME_MS };
+    const now = this.now();
+    const expiresAt = jwtExpiration(value) ?? now + FALLBACK_LIFETIME_MS;
+    const token = { value, expiresAt, refreshAt: refreshTime(now, expiresAt) };
     this.cached = token;
     return token;
   }
+}
+
+/**
+ * When to replace a token issued at `now`: an hour before expiry for normal 24h
+ * tokens, but never less than halfway through its life. Tokens are capped at
+ * the key's expiry, so in the key's last hour a fixed one-hour window would
+ * request a new token on every call.
+ */
+export function refreshTime(now: number, expiresAt: number): number {
+  const lifetime = expiresAt - now;
+  if (lifetime <= 0) return now + SKEWED_TOKEN_REUSE_MS;
+  return now + Math.max(lifetime - REFRESH_WINDOW_MS, lifetime / 2);
 }
 
 /** Garmin returns the raw JWT as the response body; tolerate a JSON wrapper too. */
