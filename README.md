@@ -283,7 +283,7 @@ Every tool is read-only (`readOnlyHint: true`). Dates are `YYYY-MM-DD` in the us
 | Tool | What it returns | Inputs / limit |
 |---|---|---|
 | `garmin_get_daily_summary` | Everything for one day: calories, steps, distance, floors, intensity minutes, HR, stress, Body Battery, SpO2, respiration. | `calendarDate` |
-| `garmin_get_daily_summaries` | Daily summaries for a range (`{ data: [...] }`). | `startDate`, `endDate` (≤ 1 year) |
+| `garmin_get_daily_summaries` | Daily summaries for a range (`{ data: [...] }`). | `startDate`, `endDate` (≤ 365 days; a full year is a very large result) |
 | `garmin_get_steps` | Steps, distance (m) and step goal per day. | `startDate`, `endDate` (≤ 28 days) |
 | `garmin_get_stress` | Overall stress level and rest/low/medium/high durations (s) per day. | `startDate`, `endDate` (≤ 28 days) |
 | `garmin_get_hydration` | Water intake, goal, sweat loss (ml) per day. | `startDate`, `endDate` (≤ 31 days) |
@@ -334,7 +334,7 @@ Every tool is read-only (`readOnlyHint: true`). Dates are `YYYY-MM-DD` in the us
 What Garmin documents, and what this server adds on top:
 
 - **Auth flow:** `POST /personalapitoken-service/personal-api/personal-api-key/token` with `Authorization: ApiKey <key>` returns a JWT access token. It is valid for 24h, or until the key expires if that comes first. There are no refresh tokens. The server caches the token in memory, requests a new one when less than an hour is left, and retries once on `401`.
-- **Range limits** (checked before calling Garmin, with a clear error): steps and stress 28 days; hydration, sleep summaries and Body Battery 31 days; daily summaries 1 year.
+- **Range limits** (checked before calling Garmin, with a clear error): steps and stress 28 days; hydration, sleep summaries and Body Battery 31 days; daily summaries 365 days (Garmin documents "1 year"; 365 avoids a Garmin 400 on a 366-day span).
 - **Read-only, pull-only, your own data only.** There are no webhooks and no workout upload: Garmin's Training API is not part of the Personal tier.
 - **Rate limits** are not published. Prefer range endpoints over many single-day calls.
 - **Not for commercial, multi-user apps.** That is Garmin's rule for the Personal API.

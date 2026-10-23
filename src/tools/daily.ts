@@ -24,10 +24,11 @@ export const getDailySummaries = jsonTool({
   description: [
     'Get daily wellness summaries (steps, calories, distance, intensity minutes, heart rate, stress, Body Battery, floors…) for every day in a range,',
     'returned as `{ data: [...] }` with one entry per day.',
-    'Maximum range: 1 year. Use for trends and comparisons across weeks or months; for one day garmin_get_daily_summary is simpler.',
+    'Maximum range: 365 days (Garmin documents 1 year). Each day is a large object, so a year of data is very long:',
+    'prefer a few weeks or months per call unless the whole year is needed. For one day garmin_get_daily_summary is simpler.',
   ].join(' '),
-  inputSchema: z.object({ startDate: startDate(), endDate: endDate('The range may span at most 1 year.') }),
-  validate: ({ startDate, endDate }) => checkRange(startDate, endDate, 366),
+  inputSchema: z.object({ startDate: startDate(), endDate: endDate('The range may span at most 365 days, counting both ends.') }),
+  validate: ({ startDate, endDate }) => checkRange(startDate, endDate, 365),
   request: ({ startDate, endDate }) => ({ path: '/usersummary-service/v2/dailysummaries', query: { startDate, endDate } }),
 });
 
@@ -37,7 +38,7 @@ export const getSteps = jsonTool({
   endpoint: 'GET /usersummary-service/stats/steps/daily/{startDate}/{endDate}',
   description:
     'Get daily step totals for a date range: one entry per day with calendarDate, totalSteps, totalDistance (meters) and stepGoal. ' +
-    'Maximum range: 28 days per request; split longer periods, or use garmin_get_daily_summaries (up to 1 year), which also includes steps.',
+    'Maximum range: 28 days per request; split longer periods, or use garmin_get_daily_summaries (up to 365 days), which also includes steps.',
   inputSchema: z.object({ startDate: startDate(), endDate: endDate('The range may span at most 28 days, counting both ends.') }),
   validate: ({ startDate, endDate }) => checkRange(startDate, endDate, 28),
   request: ({ startDate, endDate }) => ({

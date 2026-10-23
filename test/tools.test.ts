@@ -214,7 +214,7 @@ describe('validation before calling Garmin', () => {
     ['garmin_get_sleep_summaries', { startDate: '2026-09-01', endDate: '2026-10-02' }, /at most 31 days/],
     ['garmin_get_body_battery', { startDate: '2026-09-01', endDate: '2026-10-02' }, /at most 31 days/],
     ['garmin_get_hydration', { startDate: '2026-09-01', endDate: '2026-10-02' }, /at most 31 days/],
-    ['garmin_get_daily_summaries', { startDate: '2025-01-01', endDate: '2026-10-01' }, /at most 366 days/],
+    ['garmin_get_daily_summaries', { startDate: '2025-10-23', endDate: '2026-10-23' }, /at most 365 days.*366 days/],
     ['garmin_get_weight_entries', { startDate: '2026-10-10', endDate: '2026-10-01' }, /before the start date/],
     ['garmin_search_activities', { upperLatitude: 50 }, /all four bounds/],
   ];
@@ -401,5 +401,27 @@ describe('safeFilename', () => {
     [undefined, 'fallback.zip'],
   ])('%j -> %j', (input, expected) => {
     expect(safeFilename(input, 'fallback.zip')).toBe(expected);
+  });
+});
+
+describe('range boundaries', () => {
+  const ok: [string, string, string][] = [
+    ['garmin_get_steps', '2026-10-01', '2026-10-28'],
+    ['garmin_get_hydration', '2026-10-01', '2026-10-31'],
+    ['garmin_get_daily_summaries', '2025-10-24', '2026-10-23'],
+    ['garmin_get_daily_summaries', '2024-01-01', '2024-12-30'], // leap year, 365 days
+  ];
+  for (const [name, startDate, endDate] of ok) {
+    it(`${name} accepts exactly its maximum (${startDate}..${endDate})`, async () => {
+      const { client } = await connect(() => json([]));
+      const result = await client.callTool({ name, arguments: { startDate, endDate } });
+      expect(result.isError ?? false).toBe(false);
+    });
+  }
+
+  it('accepts a single-day range', async () => {
+    const { client } = await connect(() => json([]));
+    const result = await client.callTool({ name: 'garmin_get_steps', arguments: { startDate: '2026-10-01', endDate: '2026-10-01' } });
+    expect(result.isError ?? false).toBe(false);
   });
 });

@@ -59,7 +59,7 @@ These come from Garmin's OpenAPI spec (Personal API 1.0.0) and its reference cli
 - Base URL: `https://personal.connectapi.garmin.com`.
 - Token: `POST /personalapitoken-service/personal-api/personal-api-key/token`, header `Authorization: ApiKey <key>`, no body. The response body is the **raw JWT as text**, not JSON. Lifetime: 24h, or until the key expires if that comes first. No refresh tokens.
 - Data calls: `GET` with `Authorization: Bearer <jwt>`. Errors: 400/401/403/404/500. Some endpoints return 204 when there is no data.
-- Documented max ranges: steps and stress 28 days; hydration, sleep summaries and Body Battery 31 days; v2 daily summaries 1 year.
+- Documented max ranges: steps and stress 28 days; hydration, sleep summaries and Body Battery 31 days; v2 daily summaries 1 year (enforced as 365 days, counting both ends).
 - Units per the spec: weigh-ins in **kg**, weight goals in **grams**, distances in m, durations in s, hydration in ml, stress durations in s.
 - Personal tier: read-only, pull-only, own data only, not for commercial multi-user apps. No Training API (workout upload) and no webhooks.
 
