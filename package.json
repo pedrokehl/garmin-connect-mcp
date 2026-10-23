@@ -21,7 +21,7 @@
   "license": "MIT",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=20 <25"
   },
   "bin": {
     "garmin-connect-mcp": "dist/src/stdio.js"
@@ -51,5 +51,9 @@
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.0.5"
+  },
+  "allowScripts": {
+    "esbuild": false,
+    "fsevents": false
   }
 }
