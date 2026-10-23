@@ -15,8 +15,8 @@ All configuration is done with environment variables. For local development, cop
 | Variable | Required | Used by | Description |
 |---|---|---|---|
 | `GARMIN_API_KEY` | **Yes** | stdio + HTTP | Your Garmin Connect Personal API key. |
-| `MCP_AUTH_TOKEN` | **Yes, for HTTP** | HTTP | Shared secret that clients must send as `Authorization: Bearer <token>`. At least 24 characters; generate one with `openssl rand -base64 32`. Without it the HTTP server refuses every request. |
-| `MCP_OAUTH_CLIENT_SECRET` | For OAuth clients | HTTP | Enables the built-in OAuth sign-in (the Gemini app, claude.ai). At least 24 characters. Enter it in the app together with the client ID `garmin-mcp`. |
+| `MCP_AUTH_TOKEN` | **This and/or the next, for HTTP** | HTTP | Enables header-based clients (Claude Code, Cursor, Gemini CLI, `mcp-remote`), which send it as `Authorization: Bearer <token>`. At least 24 characters; generate one with `openssl rand -base64 32`. If neither this nor `MCP_OAUTH_CLIENT_SECRET` is set, the HTTP server refuses every request. |
+| `MCP_OAUTH_CLIENT_SECRET` | **This and/or the previous, for HTTP** | HTTP | Enables the built-in OAuth sign-in (the Gemini app, claude.ai). At least 24 characters. Enter it in the app together with the client ID `garmin-mcp`. The sign-in page asks for `MCP_AUTH_TOKEN` if it is set, otherwise for this secret. |
 | `MCP_OAUTH_CLIENT_ID` | No | HTTP | Overrides the OAuth client ID (default `garmin-mcp`). Only takes effect with a client secret set. |
 | `MCP_OAUTH_REDIRECT_URIS` | No | HTTP | Extra allowed OAuth callback URLs, comma-separated. claude.ai's, Gemini Enterprise's and loopback (`http://localhost:*`) callbacks are allowed by default. |
 | `GARMIN_API_BASE_URL` | No | both | Override the API host. Default: `https://personal.connectapi.garmin.com`. |
@@ -93,6 +93,12 @@ vercel env add GARMIN_API_KEY production
 vercel env add MCP_AUTH_TOKEN production
 ```
 
+For OAuth clients, add `MCP_OAUTH_CLIENT_SECRET` instead of, or as well as, `MCP_AUTH_TOKEN`:
+
+```bash
+vercel env add MCP_OAUTH_CLIENT_SECRET production
+```
+
 ```bash
 vercel deploy --prod
 ```
@@ -142,6 +148,8 @@ npx wrangler secret put GARMIN_API_KEY
 npx wrangler secret put MCP_AUTH_TOKEN
 ```
 
+Use `MCP_OAUTH_CLIENT_SECRET` instead of, or as well as, `MCP_AUTH_TOKEN` for OAuth clients. The Worker receives every path, so the OAuth endpoints work without extra routing.
+
 ```bash
 npx wrangler deploy
 ```
@@ -154,10 +162,11 @@ Create `netlify/functions/mcp.mts`:
 import { createHttpHandler } from '../../src/http.js';
 
 export default createHttpHandler();
-export const config = { path: '/mcp' };
+// /oauth/* and /.well-known/* are only needed for OAuth clients.
+export const config = { path: ['/mcp', '/oauth/*', '/.well-known/*'] };
 ```
 
-Set `GARMIN_API_KEY` and `MCP_AUTH_TOKEN` under **Site configuration → Environment variables**, then deploy.
+Set `GARMIN_API_KEY` plus `MCP_AUTH_TOKEN` and/or `MCP_OAUTH_CLIENT_SECRET` under **Site configuration → Environment variables**, then deploy.
 
 ### Deno Deploy
 
@@ -175,7 +184,7 @@ and a `deno.json`. The sources use Node-style `.js` import suffixes, which Deno 
 { "unstable": ["sloppy-imports"] }
 ```
 
-Run it locally with `deno run --allow-env --allow-net --allow-read main.ts`, or deploy the folder to Deno Deploy with the two environment variables set.
+Run it locally with `deno run --allow-env --allow-net --allow-read main.ts`, or deploy the folder to Deno Deploy with `GARMIN_API_KEY` plus `MCP_AUTH_TOKEN` and/or `MCP_OAUTH_CLIENT_SECRET` set.
 
 ### What has been verified
 
@@ -189,8 +198,8 @@ Run it locally with `deno run --allow-env --allow-net --allow-read main.ts`, or 
 | Symptom | Cause / fix |
 |---|---|
 | `Garmin refused the Personal API key (401 …)` | Key wrong, expired or deleted. Create a new one at [Personal API Token](https://connect.garmin.com/app/settings/personalApiToken) and update `GARMIN_API_KEY`. |
-| HTTP `401 Missing or invalid bearer token` | The client isn't sending `Authorization: Bearer <MCP_AUTH_TOKEN>`, or the token differs from the deployed one. |
-| HTTP `500 Server not configured` | `MCP_AUTH_TOKEN` or `GARMIN_API_KEY` missing on the host. Set it and redeploy. |
+| HTTP `401 Missing or invalid credentials` | The client isn't sending `Authorization: Bearer <MCP_AUTH_TOKEN>` (or the token differs from the deployed one), or its OAuth sign-in expired. |
+| HTTP `500 Server not configured` | `GARMIN_API_KEY` is missing, or neither `MCP_AUTH_TOKEN` nor `MCP_OAUTH_CLIENT_SECRET` is set (or one is shorter than 24 characters). Fix it and redeploy. |
 | `{"noData": true}` | Nothing recorded for that date, or your device doesn't support the metric (HRV, SpO2, Body Battery…). |
 | `This endpoint accepts at most N days` | Split the range. The model usually does this by itself after reading the error. |
 | `too large to return inline` | Use the local server with `GARMIN_DOWNLOAD_DIR`. |
@@ -200,5 +209,5 @@ Run it locally with `deno run --allow-env --allow-net --allow-read main.ts`, or 
 | OAuth page: `Redirect URL not allowed` | Add the URL shown on the page to `MCP_OAUTH_REDIRECT_URIS` and redeploy. |
 | OAuth page: `Unknown client` | The client ID entered in the app isn't `garmin-mcp`, or isn't the value of `MCP_OAUTH_CLIENT_ID` if you set one. |
 | Token request fails with `invalid_client` | The client secret entered in the app doesn't match `MCP_OAUTH_CLIENT_SECRET`. |
-| An OAuth app suddenly asks to sign in again | `MCP_AUTH_TOKEN` or the client secret changed, which revokes all OAuth tokens, or the 30-day refresh token expired. |
+| An OAuth app suddenly asks to sign in again | The client secret or `MCP_AUTH_TOKEN` changed, which revokes all OAuth tokens, or the 30-day refresh token expired. |
 | Server exits with `GARMIN_API_KEY is not set` | Add `GARMIN_API_KEY` to the `env` block of your client config. |
